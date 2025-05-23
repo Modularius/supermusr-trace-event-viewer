@@ -1,0 +1,16 @@
+[package]
+name = "supermusr-trace-event-viewer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+assert_approx_eq = "1.1.0"
+chrono = { version = "0.4.41", features = ["serde"] }
+clap = { version = "4.5.37", features = ["derive", "env"] }
+flatbuffers = "25.2.10"
+rdkafka = { version = "0.37.0", features = ["cmake-build", "ssl", "gssapi", "sasl"] }
+supermusr-common = { path = "./../supermusr-data-pipeline/common" }
+supermusr-streaming-types = { path = "./../supermusr-data-pipeline/streaming-types" }
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal", "sync"] }
+tracing = "0.1.41"
