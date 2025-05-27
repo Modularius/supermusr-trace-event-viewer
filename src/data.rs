@@ -7,6 +7,7 @@ use supermusr_streaming_types::{
     dev2_digitizer_event_v2_generated::DigitizerEventListMessage, FrameMetadata,
 };
 use tracing::error;
+use crate::CollectMode;
 
 trait CreateFromMessage<M> {
     fn create_from_message(msg: &M) -> Self;
@@ -150,5 +151,13 @@ impl Cache {
 
     pub(crate) fn get_num_traces_with_events(&self) -> usize {
         self.traces.values().filter(|x|x.events.is_some()).count()
+    }
+
+    pub(crate) fn get_count(&self, mode: &CollectMode) -> usize {
+        match mode {
+            CollectMode::Traces => self.get_num_traces(),
+            CollectMode::Events => self.get_num_events(),
+            CollectMode::All => self.get_num_traces_with_events()
+        }
     }
 }

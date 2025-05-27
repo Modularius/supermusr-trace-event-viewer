@@ -1,4 +1,5 @@
-.direnv/*
+.direnv
+.vscode
 
 # Added by cargo
 

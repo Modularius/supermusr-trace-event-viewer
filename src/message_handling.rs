@@ -1,3 +1,24 @@
+use crate::{Cli, CollectMode, data::Cache};
+use rdkafka::{
+    message::BorrowedMessage,
+    Message,
+};
+use supermusr_common::{
+    init_tracer,
+    tracer::{TracerEngine, TracerOptions},
+    CommonKafkaOpts,
+};
+use supermusr_streaming_types::{
+    dat2_digitizer_analog_trace_v2_generated::{
+        digitizer_analog_trace_message_buffer_has_identifier,
+        root_as_digitizer_analog_trace_message, DigitizerAnalogTraceMessage,
+    },
+    dev2_digitizer_event_v2_generated::{
+        digitizer_event_list_message_buffer_has_identifier, root_as_digitizer_event_list_message,
+        DigitizerEventListMessage,
+    },
+};
+
 fn unpack_message<'a, F, G, M>(
     m: &'a BorrowedMessage<'a>,
     topic: &str,
@@ -42,38 +63,28 @@ fn unpack_event_list_message<'a>(
     )
 }
 
-impl CollectMode {
-    pub(crate) fn process_message(&self, cache: &mut Cache, message: &BorrowedMessage) {
-        match self.collect {
-            Self::Traces => {
-                if let Some(msg) = unpack_trace_message(&m, args.trace_topic.as_str()) {
-                    cache.push_trace(&msg);
-                }
-            }
-            Self::Events => {
-                if let Some(msg) =
-                    unpack_event_list_message(&m, args.digitiser_event_topic.as_str())
-                {
-                    cache.push_events(&msg);
-                }
-            }
-            Self::All => {
-                if let Some(msg) = unpack_trace_message(&m, args.trace_topic.as_str()) {
-                    cache.push_trace(&msg);
-                } else if let Some(msg) =
-                    unpack_event_list_message(&m, args.digitiser_event_topic.as_str())
-                {
-                    cache.push_event_list_to_trace(&msg);
-                }
+pub(crate) fn process_message(args: &Cli, cache: &mut Cache, message: &BorrowedMessage) {
+    match args.collect {
+        CollectMode::Traces => {
+            if let Some(msg) = unpack_trace_message(&message, args.trace_topic.as_str()) {
+                cache.push_trace(&msg);
             }
         }
-    }
-
-    pub(crate) fn get_count(&self, cache: &Cache) -> usize {
-        match self {
-            Self::Traces => cache.get_num_traces(),
-            Self::Events => cache.get_num_events(),
-            Self::All => cache.get_num_traces_with_events()
+        CollectMode::Events => {
+            if let Some(msg) =
+                unpack_event_list_message(&message, args.digitiser_event_topic.as_str())
+            {
+                cache.push_events(&msg);
+            }
+        }
+        CollectMode::All => {
+            if let Some(msg) = unpack_trace_message(&message, args.trace_topic.as_str()) {
+                cache.push_trace(&msg);
+            } else if let Some(msg) =
+                unpack_event_list_message(&message, args.digitiser_event_topic.as_str())
+            {
+                cache.push_event_list_to_trace(&msg);
+            }
         }
     }
 }
