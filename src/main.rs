@@ -1,42 +1,37 @@
 //!
 //!
-use clap::{Parser, Subcommand,ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use engine::Engine;
 use supermusr_common::{
-    CommonKafkaOpts, Intensity, init_tracer,
-    tracer::{FutureRecordTracerExt, OptionalHeaderTracerExt, TracerEngine, TracerOptions},
+    CommonKafkaOpts, init_tracer,
+    tracer::{TracerEngine, TracerOptions},
 };
-use data::Cache;
-use message_handling::process_message;
+use cache::Cache;
 use rdkafka::{
     TopicPartitionList,
     consumer::{CommitMode, BaseConsumer, Consumer},
-    message::BorrowedMessage,
-    Message,
     error::KafkaError,
     util::Timeout,
     Offset
 };
 use std::{net::SocketAddr, time::Duration};
-/*
-use supermusr_common::{
-    init_tracer,
-    tracer::{TracerEngine, TracerOptions},
-    CommonKafkaOpts,
-};
-use supermusr_streaming_types::{
-    dat2_digitizer_analog_trace_v2_generated::{
-        digitizer_analog_trace_message_buffer_has_identifier,
-        root_as_digitizer_analog_trace_message, DigitizerAnalogTraceMessage,
-    },
-    dev2_digitizer_event_v2_generated::{
-        digitizer_event_list_message_buffer_has_identifier, root_as_digitizer_event_list_message,
-        DigitizerEventListMessage,
-    },
-}; */
 use tracing::{info,warn};
 
 mod data;
+mod cache;
+mod engine;
 mod message_handling;
+
+#[derive(Clone, Debug, Args)]
+struct Topics {
+    /// Kafka trace topic.
+    #[clap(long)]
+    trace_topic: String,
+
+    /// Kafka digitiser event list topic.
+    #[clap(long)]
+    digitiser_event_topic: String,
+}
 
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
@@ -49,13 +44,8 @@ struct Cli {
     #[clap(long)]
     consumer_group: String,
 
-    /// Kafka trace topic.
-    #[clap(long)]
-    trace_topic: String,
-
-    /// Kafka digitiser event list topic.
-    #[clap(long)]
-    digitiser_event_topic: String,
+    #[clap(flatten)]
+    topics: Topics,
 
     /// If set, then OpenTelemetry data is sent to the URL specified, otherwise the standard tracing subscriber is used.
     #[clap(long)]
@@ -148,20 +138,21 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     let mut tpl = TopicPartitionList::new();
-    tpl.add_partition_offset(args.trace_topic.as_str(), 0, Offset::Beginning)?;
-    tpl.add_partition_offset(args.digitiser_event_topic.as_str(), 0, Offset::Beginning)?;
+    tpl.add_partition_offset(args.topics.trace_topic.as_str(), 0, Offset::OffsetTail(args.num.try_into()?))?;
+    tpl.add_partition_offset(args.topics.digitiser_event_topic.as_str(), 0, Offset::OffsetTail(args.num.try_into()?))?;
+    consumer.assign(&tpl)?;
 
     let timeout = Timeout::After(Duration::from_millis(100));
 
-    let mut cache = Cache::default();
+    let mut engine = Engine::new(args.collect, args.topics);
     
     info!("Starting Loop");
 
-    while cache.get_count(&args.collect) < args.num {
-        match consumer.poll(timeout) {
+    while engine.get_count() < args.num {
+        match consumer.poll(None) {
             Some(Ok(m)) => {
                 info!("New Message");
-                process_message(&args, &mut cache, &m);
+                engine.process_message(&m);
                 consumer.commit_message(&m, CommitMode::Async).unwrap();
             }
             Some(Err(e)) => warn!("Kafka error: {}", e),
