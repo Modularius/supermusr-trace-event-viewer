@@ -24,6 +24,7 @@
             nixd
             direnv
             valgrind-light
+            pkgconfig
             cifs-utils
             nfs-utils
             hdf5_1_10
