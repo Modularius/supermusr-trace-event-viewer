@@ -3,8 +3,7 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use engine::Engine;
 use supermusr_common::{
-    CommonKafkaOpts, init_tracer,
-    tracer::{TracerEngine, TracerOptions},
+    init_tracer, tracer::{TracerEngine, TracerOptions}, CommonKafkaOpts, Intensity, Time
 };
 use cache::Cache;
 use rdkafka::{
@@ -14,10 +13,12 @@ use rdkafka::{
     util::Timeout,
     Offset
 };
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tracing::{info,warn};
 
 mod data;
+mod output_to_file;
+mod build_graph;
 mod cache;
 mod engine;
 mod message_handling;
@@ -33,6 +34,25 @@ struct Topics {
     digitiser_event_topic: String,
 }
 
+#[derive(Clone, Debug, Args)]
+struct UserBounds {
+    /// Minimum time bin to graph, derived from input if left unspecified.
+    #[clap(long)]
+    time_min: Option<Time>,
+
+    /// Maximum time bin to graph, derived from input if left unspecified.
+    #[clap(long)]
+    time_max: Option<Time>,
+
+    /// Minimum intensity value to graph, derived from input if left unspecified.
+    #[clap(long)]
+    intensity_min: Option<Intensity>,
+
+    /// Maximum intensity value to graph, derived from input if left unspecified.
+    #[clap(long)]
+    intensity_max: Option<Intensity>,
+}
+
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -46,6 +66,9 @@ struct Cli {
 
     #[clap(flatten)]
     topics: Topics,
+
+    #[clap(flatten)]
+    bounds: UserBounds,
 
     /// If set, then OpenTelemetry data is sent to the URL specified, otherwise the standard tracing subscriber is used.
     #[clap(long)]
@@ -91,7 +114,7 @@ enum OutputMode {
 #[derive(Clone, Parser)]
 struct OutputToFile {
     #[clap(long)]
-    path: String,
+    path: PathBuf,
 }
 
 pub fn create_default_consumer(
@@ -144,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
 
     let timeout = Timeout::After(Duration::from_millis(100));
 
-    let mut engine = Engine::new(args.collect, args.topics);
+    let mut engine = Engine::new(args.collect, args.topics, args.mode);
     
     info!("Starting Loop");
 
@@ -159,5 +182,7 @@ async fn main() -> anyhow::Result<()> {
             None => warn!("No message"),
         }
     }
+
+    engine.output(&args.bounds);
     Ok(())
 }

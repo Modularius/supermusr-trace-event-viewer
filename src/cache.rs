@@ -1,20 +1,24 @@
 //!
+use crate::{
+    data::{CreateFromMessage, DigitiserEventList, DigitiserMetadata, DigitiserTrace},
+    message_handling::UnpackMessage,
+    Cli, CollectMode,
+};
 use chrono::{DateTime, Utc};
 use rdkafka::message::BorrowedMessage;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::{self, Entry}, HashMap};
 use supermusr_common::{Channel, DigitizerId, Intensity, Time};
 use supermusr_streaming_types::{
     dat2_digitizer_analog_trace_v2_generated::DigitizerAnalogTraceMessage,
     dev2_digitizer_event_v2_generated::DigitizerEventListMessage,
 };
 use tracing::{error, info};
-use crate::{data::{CreateFromMessage, DigitiserEventList, DigitiserMetadata, DigitiserTrace}, message_handling::UnpackMessage, Cli, CollectMode};
-
 
 #[derive(Default)]
 pub(crate) struct Cache {
     traces: HashMap<DigitiserMetadata, DigitiserTrace>,
     events: HashMap<DigitiserMetadata, DigitiserEventList>,
+    bounds: Option<((Time, Time), (Intensity, Intensity))>,
 }
 
 impl Cache {
@@ -49,9 +53,16 @@ impl Cache {
     }
 
     pub(crate) fn get_num_traces_with_events(&self) -> usize {
-        self.traces.values().filter(|x|x.events.is_some()).count()
+        self.traces.values().filter(|x| x.events.is_some()).count()
     }
 
+    pub(crate) fn iter_traces(&self) -> hash_map::Iter<'_, DigitiserMetadata, DigitiserTrace> {
+        self.traces.iter()
+    }
+
+    pub(crate) fn iter_events(&self) -> hash_map::Iter<'_, DigitiserMetadata, DigitiserEventList> {
+        self.events.iter()
+    }
 
     pub(crate) fn push_events(&mut self, msg: &DigitizerEventListMessage<'_>) {
         info!("New Events");

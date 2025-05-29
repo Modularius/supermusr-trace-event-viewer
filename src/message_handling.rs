@@ -1,7 +1,4 @@
-use rdkafka::{
-    message::BorrowedMessage,
-    Message,
-};
+use rdkafka::{message::BorrowedMessage, Message};
 use supermusr_streaming_types::{
     dat2_digitizer_analog_trace_v2_generated::{
         digitizer_analog_trace_message_buffer_has_identifier,
