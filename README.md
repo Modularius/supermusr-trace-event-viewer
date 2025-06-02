@@ -64,32 +64,21 @@ The deployment follows the pattern:
 ```mermaid
 erDiagram
 
-RUN_PIPELINE["run_pipeline"] {}
-LIBS["libs/*"] {}
-RUN_PIPELINE ||--|| LIBS: calls
+COLLECT["collect_mode"] {}
+COLLECT ||--|| COLLECT_TRACES: traces
+COLLECT ||--|| COLLECT_EVENTS: events
+COLLECT ||--|| COLLECT_ALL: all
 
-SETUP["Settings/PipelineSetup.sh"] {
-    
-}
-RUN_PIPELINE ||--|| SETUP: calls
+COLLECT_TRACES["traces"] {}
+COLLECT_EVENTS["events"] {}
+COLLECT_ALL["all"] {}
 
-CONFIG["Settings/*/PipelineConfig.sh"] {
-    
-}
-RUN_PIPELINE ||--|| CONFIG: calls
+COLLECT_TRACES ||--|| TRACE_TOPIC: topic
+COLLECT_EVENTS ||--|| EVENT_TOPIC: topic
+COLLECT_ALL ||--|| TRACE_TOPIC: topic
+COLLECT_ALL ||--|| EVENT_TOPIC: topic
 
-EVCONFIG["Settings/EventFormationPipelineConfig.sh"] {
-    
-}
-RUN_PIPELINE ||--|| EVCONFIG: calls
+TRACE_TOPIC["trace_topic"] {}
+EVENT_TOPIC["event_topic"] {}
 
-SCRIPTS["Scripts/*.sh"] {
-    
-}
-RUN_PIPELINE ||--|{ SCRIPTS: calls
-
-TESTS["Tests/*.sh"] {
-    
-}
-SCRIPTS }|--|{ TESTS: calls
 ```

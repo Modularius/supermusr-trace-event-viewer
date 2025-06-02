@@ -26,6 +26,8 @@
             valgrind-light
             pkgconfig
             cifs-utils
+            fontconfig
+            freetype
             nfs-utils
             hdf5_1_10
             kcat

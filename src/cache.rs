@@ -1,18 +1,13 @@
 //!
-use crate::{
-    data::{CreateFromMessage, DigitiserEventList, DigitiserMetadata, DigitiserTrace},
-    message_handling::UnpackMessage,
-    Cli, CollectMode,
-};
-use chrono::{DateTime, Utc};
-use rdkafka::message::BorrowedMessage;
 use std::collections::{hash_map::{self, Entry}, HashMap};
-use supermusr_common::{Channel, DigitizerId, Intensity, Time};
+use supermusr_common::{Intensity, Time};
 use supermusr_streaming_types::{
     dat2_digitizer_analog_trace_v2_generated::DigitizerAnalogTraceMessage,
     dev2_digitizer_event_v2_generated::DigitizerEventListMessage,
 };
 use tracing::{error, info};
+
+use crate::data::{CreateFromMessage, DigitiserEventList, DigitiserMetadata, DigitiserTrace};
 
 #[derive(Default)]
 pub(crate) struct Cache {

@@ -1,5 +1,7 @@
 .direnv
 .vscode
+out
+
 
 # Added by cargo
 

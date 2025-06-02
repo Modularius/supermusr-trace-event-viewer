@@ -1,57 +1,34 @@
 //!
 //!
-use clap::{Args, Parser, Subcommand, ValueEnum};
-use engine::Engine;
-use supermusr_common::{
-    init_tracer, tracer::{TracerEngine, TracerOptions}, CommonKafkaOpts, Intensity, Time
-};
+use build_graph::{BackendSVG, BuildGraph};
 use cache::Cache;
+use chrono::{DateTime, Utc};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use cli_structs::{CollectType, Select, Mode, Topics, UserBounds};
+use data::Bounds;
+use finder::{FindByDate, TraceFinderByKafkaTimestamp};
+use message::{DigitizerMessage, UnpackMessage};
+//use engine::Engine;
+//use finder::Finder;
+use supermusr_common::{
+    init_tracer, tracer::{TracerEngine, TracerOptions}, Channel, CommonKafkaOpts, DigitizerId
+};
+//use cache::Cache;
 use rdkafka::{
-    TopicPartitionList,
-    consumer::{CommitMode, BaseConsumer, Consumer},
-    error::KafkaError,
-    util::Timeout,
-    Offset
+    consumer::{BaseConsumer, CommitMode, Consumer}, error::KafkaError, message::BorrowedMessage
 };
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tracing::{info,warn};
 
+mod cli_structs;
 mod data;
-mod output_to_file;
+mod output;
 mod build_graph;
 mod cache;
-mod engine;
+//mod engine;
 mod message_handling;
-
-#[derive(Clone, Debug, Args)]
-struct Topics {
-    /// Kafka trace topic.
-    #[clap(long)]
-    trace_topic: String,
-
-    /// Kafka digitiser event list topic.
-    #[clap(long)]
-    digitiser_event_topic: String,
-}
-
-#[derive(Clone, Debug, Args)]
-struct UserBounds {
-    /// Minimum time bin to graph, derived from input if left unspecified.
-    #[clap(long)]
-    time_min: Option<Time>,
-
-    /// Maximum time bin to graph, derived from input if left unspecified.
-    #[clap(long)]
-    time_max: Option<Time>,
-
-    /// Minimum intensity value to graph, derived from input if left unspecified.
-    #[clap(long)]
-    intensity_min: Option<Intensity>,
-
-    /// Maximum intensity value to graph, derived from input if left unspecified.
-    #[clap(long)]
-    intensity_max: Option<Intensity>,
-}
+mod finder;
+mod message;
 
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
@@ -82,39 +59,16 @@ struct Cli {
     #[clap(long, default_value = "127.0.0.1:9090")]
     observability_address: SocketAddr,
 
+    #[clap(flatten)]
+    select: Select,
+
     /// Which data to collect.
     #[clap(long)]
-    collect: CollectMode,
-
-    /// How much data to collect.
-    #[clap(long)]
-    num: usize,
+    collect: CollectType,
 
     /// Subcommand to execute.
     #[command(subcommand)]
-    mode: OutputMode,
-}
-
-#[derive(Clone, Copy, Debug, ValueEnum)]
-enum CollectMode {
-    /// Collects the given number of traces.
-    Traces,
-    /// Collects the given number of event lists.
-    Events,
-    /// Collects the given number of traces and their corresponding eventlists.
-    All,
-}
-
-#[derive(Clone, Subcommand)]
-enum OutputMode {
-    /// Outputs image to file.
-    File(OutputToFile),
-}
-
-#[derive(Clone, Parser)]
-struct OutputToFile {
-    #[clap(long)]
-    path: PathBuf,
+    mode: Mode,
 }
 
 pub fn create_default_consumer(
@@ -160,29 +114,120 @@ async fn main() -> anyhow::Result<()> {
         None,
     )?;
 
-    let mut tpl = TopicPartitionList::new();
-    tpl.add_partition_offset(args.topics.trace_topic.as_str(), 0, Offset::OffsetTail(args.num.try_into()?))?;
-    tpl.add_partition_offset(args.topics.digitiser_event_topic.as_str(), 0, Offset::OffsetTail(args.num.try_into()?))?;
-    consumer.assign(&tpl)?;
+    let mut cache = Cache::default();
 
-    let timeout = Timeout::After(Duration::from_millis(100));
+    //let timestamp = "2025-05-31 17:38:00.0 UTC".parse()?;
+    let tf = TraceFinderByKafkaTimestamp::new(&consumer, &args.topics.trace_topic);
+    let trace_finder = FindByDate::new(tf, &args.select.step);
+    let did = trace_finder.find(&args.topics, args.select.timestamp, args.select.channel);
 
-    let mut engine = Engine::new(args.collect, args.topics, args.mode);
-    
-    info!("Starting Loop");
-
-    while engine.get_count() < args.num {
-        match consumer.poll(None) {
-            Some(Ok(m)) => {
-                info!("New Message");
-                engine.process_message(&m);
-                consumer.commit_message(&m, CommitMode::Async).unwrap();
+    let (idx, tmstp) = trace_finder.find_first_index_with_timestamp_before(args.select.timestamp)?;
+    let first_message = get_next_message_with_timestamp_after(&consumer, &args.topics, &args.select.timestamp);
+    if let Some(first_message) = first_message {
+        let dig_msg = first_message.unpack_message(&args.topics).unwrap();
+        let timestamp: DateTime<Utc> = dig_msg.timestamp().unwrap();
+        info!("Seeking Timestamp {timestamp}");
+        let mut dig_id = None;
+        if let Some(did) = push_trace(&mut cache, args.select.channel, dig_msg) {
+            dig_id = Some(did);
+        } else {
+            for msg in consumer.iter() {
+                match msg {
+                    Ok(message) => 
+                        if let Some(dig_msg) = message.unpack_message(&args.topics) {
+                            if dig_msg.is_timestamp_equal_to(timestamp) {
+                                    if let Some(did) = push_trace(&mut cache, args.select.channel, dig_msg) {
+                                        dig_id = Some(did);
+                                        break;
+                                    }
+                            }
+                        },
+                    Err(_) => {},
+                }
             }
-            Some(Err(e)) => warn!("Kafka error: {}", e),
-            None => warn!("No message"),
+        }
+
+        if let Some(dig_id) = dig_id {
+            let ef = TraceFinderByKafkaTimestamp::new(&consumer, &args.topics.digitiser_event_topic);
+            let event_finder = FindByDate::new(ef, &args.select.step);
+
+            event_finder.find_first_index_with_timestamp_before(args.select.timestamp)?;
+            let first_message = get_next_message_with_timestamp_after(&consumer, &args.topics, &args.select.timestamp);
+            if let Some(first_message) = first_message {
+                let dig_msg = first_message.unpack_message(&args.topics).unwrap();
+                let timestamp: DateTime<Utc> = dig_msg.timestamp().unwrap();
+                info!("Seeking Timestamp {timestamp}");
+                if push_event_list_if_valid(&mut cache,dig_id,dig_msg).is_none() {
+                    for msg in consumer.iter() {
+                        match msg {
+                            Ok(message) => 
+                                if let Some(dig_msg) = message.unpack_message(&args.topics) {
+                                    if dig_msg.is_timestamp_equal_to(timestamp) {
+                                        if push_event_list_if_valid(&mut cache,dig_id,dig_msg).is_some() {
+                                            break;
+                                        }
+                                    }
+                                },
+                            Err(_) => {},
+                        }
+                    }
+                }
+            }
         }
     }
 
-    engine.output(&args.bounds);
+
+    
+    match args.mode {
+        Mode::File(output_to_file) => {
+            info!("Outputting {} Digitiser Traces", cache.iter_traces().len());
+            for (metadata, traces) in cache.iter_traces() {
+                info!("Outputting Frame {:?} Traces", metadata);
+                info!("Outputting {} Traces", traces.traces.len());
+                for (channel, trace) in &traces.traces {
+                    info!("Outputting Channel {channel}");
+                    let mut bounds = Bounds::from_trace(&trace).expect("");
+                    bounds.ammend_with_user_input(&args.bounds);
+                    let graph = BuildGraph::<BackendSVG<'_>>::new(800,600,bounds.time_range(), bounds.intensity_range());
+
+                    let path_buf = graph.build_path(&output_to_file.path, metadata, *channel).expect("extension should write");
+                    let eventlist = traces.events.as_ref().and_then(|ev|ev.get(channel));
+                    graph.save_trace_graph(&path_buf, &trace, eventlist).expect("");
+                }
+            }
+        },
+    }
     Ok(())
+}
+
+
+fn push_event_list_if_valid(cache: &mut Cache, dig_id: DigitizerId, dig_msg: DigitizerMessage) -> Option<()> {
+    if let DigitizerMessage::EventList(dig_eventlist_msg) = dig_msg {
+        info!("Found EventList");
+        if dig_eventlist_msg.digitizer_id() == dig_id {
+            info!("Push EventList");
+            cache.push_event_list_to_trace(&dig_eventlist_msg);
+            Some(())
+        } else {
+            None
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn get_next_message_with_timestamp_after<'a>(consumer: &'a BaseConsumer, topics: &Topics, timestamp: &DateTime<Utc>) -> Option<BorrowedMessage<'a>> {
+    for msg in consumer.iter() {
+        match msg {
+            Ok(message) => 
+                if let Some(dig_msg) = message.unpack_message(topics) {
+                    if dig_msg.timestamp()
+                        .is_some_and(|ts : DateTime<Utc>|ts > *timestamp) {
+                            return Some(message);
+                    }
+                }
+            Err(_) => {},
+        }
+    }
+    None
 }

@@ -1,39 +1,85 @@
-use std::{ops::Range, path::{Path, PathBuf}};
+use std::{fs::create_dir_all, marker::PhantomData, ops::Range, path::{Path, PathBuf}};
 
-use plotters::{chart::{ChartBuilder, ChartContext}, coord::{types::RangedCoordf32, Shift}, prelude::{BitMapBackend, Cartesian2d, DrawingArea, DrawingAreaErrorKind, IntoDrawingArea, PathElement}, series::LineSeries, style::{IntoFont, RGBColor, BLUE}};
-use crate::data::Trace;
+use anyhow::{bail, Error};
+use plotters::{chart::{ChartBuilder, ChartContext}, coord::{types::RangedCoordf32, Shift}, prelude::{BitMapBackend, Cartesian2d, Circle, DrawingArea, DrawingBackend, IntoDrawingArea, PathElement, SVGBackend}, series::{LineSeries, PointSeries}, style::{IntoFont, RGBColor, ShapeStyle, BLACK, BLUE, WHITE}};
+use supermusr_common::Channel;
+use tracing::{info, instrument};
+use crate::data::{DigitiserMetadata, EventList, Trace};
 
-pub(crate) struct BuildGraph {
+pub(crate) trait Backend<'b> {
+    const EXTENSION: &'static str;
+    type Backend: DrawingBackend;
+
+    fn new<T>(path: &'b T, size: (u32, u32)) -> Self::Backend where T: AsRef<Path> + ?Sized;
+}
+
+pub(crate) struct BackendSVG<'a> {
+    phantom: PhantomData<&'a()>
+}
+
+impl<'a,'b:'a> Backend<'b> for BackendSVG<'a> {
+    const EXTENSION: &'static str  = "svg";
+    type Backend = SVGBackend<'a>;
+    
+    fn new<T>(path: &'b T, size: (u32, u32)) -> Self::Backend where T: AsRef<Path> + ?Sized {
+        SVGBackend::new(path, size)
+    }
+}
+
+pub(crate) struct BuildGraph<'b,B> where B: Backend<'b> {
     width: usize,
     height: usize,
     x_range: Range<f32>,
     y_range: Range<f32>,
+    phantom: PhantomData<&'b B>,
 }
 
-impl BuildGraph {
+impl<'b, B> BuildGraph<'b, B> where B: Backend<'b>, <B::Backend as DrawingBackend>::ErrorType: 'static {
+    #[instrument(skip_all, level = "debug")]
     pub(crate) fn new(width: usize, height: usize, x_range: Range<f32>, y_range: Range<f32>) -> Self {
         Self {
             width,
             height,
             x_range,
             y_range,
+            phantom: Default::default()
         }
     }
 
-    pub(crate) fn save_trace_graph(&self, path: &Path, trace: &Trace) -> Result<(), anyhow::Error> {
-        let root = BitMapBackend::new(path, (self.width as u32, self.height as u32)).into_drawing_area();
-        self.build_trace_graph(&root, trace)?;
+    #[instrument(skip_all, level = "debug")]
+    pub(crate) fn build_path(&self, path: &'b Path, metadata: &DigitiserMetadata, channel: Channel) -> Result<PathBuf, anyhow::Error> {
+        let mut path_buf = path.to_owned();
+        path_buf.push(metadata.timestamp.to_rfc3339());
+        create_dir_all(&path_buf)?;
+        path_buf.push(channel.to_string());
+
+        if path_buf.set_extension(B::EXTENSION) {
+            Ok(path_buf)
+        } else {
+            bail!("Could not set file extension {} to {:?}", B::EXTENSION, path_buf);
+        }
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    pub(crate) fn save_trace_graph(&self, path: &'b Path, trace: &Trace, eventlist: Option<&EventList>) -> Result<(), anyhow::Error> {
+        info!("Saving to file {path:?}");
+        let root = B::new(path, (self.width as u32, self.height as u32)).into_drawing_area();
+        root.fill(&WHITE)?;
+        self.build_trace_graph(&root, trace, eventlist)?;
         root.present()?;
         Ok(())
     }
-    pub(crate) fn build_trace_graph(&self, root: &DrawingArea<BitMapBackend, Shift>, trace: &Trace) -> Result<(), anyhow::Error> {
+    
+    #[instrument(skip_all, level = "debug")]
+    pub(crate) fn build_trace_graph<'a>(&'a self, root: &'a DrawingArea<B::Backend, Shift>, trace: &Trace, eventlist: Option<&EventList>) -> Result<(), anyhow::Error>
+    {
         let mut chart = ChartBuilder::on(root)
             .x_label_area_size(35)
             .y_label_area_size(40)
             //.right_y_label_area_size(40)
             .margin(5)
             .caption("Trace", ("sans-serif", 50.0).into_font())
-            .build_cartesian_2d(0f32..10f32, 0.1f32..1e10f32)?;
+            .build_cartesian_2d(self.x_range.clone(), self.y_range.clone())?;
             //.set_secondary_coord(0f32..10f32, -1.0f32..1.0f32);
 
             
@@ -46,27 +92,43 @@ impl BuildGraph {
             .draw()?;
         
         self.draw_trace_to_chart(&mut chart, trace)?;
+        if let Some(eventlist) = eventlist {
+            self.draw_eventlist_to_chart(&mut chart, eventlist)?;
+        }
 
         chart
             .configure_series_labels()
-            .background_style(RGBColor(128, 128, 128))
+            .background_style(WHITE)
             .draw()?;
         Ok(())
     }
 
-    fn draw_trace_to_chart(&self, chart: &mut ChartContext<BitMapBackend, Cartesian2d<RangedCoordf32, RangedCoordf32>>, trace: &Trace) -> Result<(), anyhow::Error> {
-        let data = trace.iter().cloned().enumerate().map(|(x,y)|(x as f32,y as f32));
+    #[instrument(skip_all, level = "debug")]
+    fn draw_eventlist_to_chart<'a>(&'a self, chart: &'a mut ChartContext<B::Backend, Cartesian2d<RangedCoordf32, RangedCoordf32>>, eventlist: &EventList) -> Result<(), anyhow::Error>
+    {
+        let data = eventlist.iter().map(|el|(el.time as f32, el.intensity as f32));
+        let ps : PointSeries<_,_,Circle<_,_>,_> = PointSeries::new(data, 4, ShapeStyle::from(&BLACK));
+        chart
+            .draw_series(ps)?
+            .label("y = Event")
+            .legend(|(x, y)| Circle::new((x,y), 4, BLACK));
+        Ok(())
+    }
+    #[instrument(skip_all, level = "debug")]
+    fn draw_trace_to_chart<'a>(&'a self, chart: &'a mut ChartContext<B::Backend, Cartesian2d<RangedCoordf32, RangedCoordf32>>, trace: &Trace) -> Result<(), anyhow::Error>
+    {
+        let data = trace.iter().cloned().enumerate().map(|(x,y)|(x as f32, y as f32));
         chart
             .draw_series(LineSeries::new(
                 data,
                 &BLUE,
             ))?
             .label("y = Trace")
-            .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
+            .legend(|(x, y)| PathElement::new(vec![(x - 10, y), (x + 10, y)], BLUE));
         Ok(())
     }
 
-    pub(crate) fn build_event_graph(&self, root: &DrawingArea<BitMapBackend, Shift>, trace: Trace) -> Result<(), anyhow::Error> {
+    pub(crate) fn build_event_graph(&self, root: &DrawingArea<SVGBackend, Shift>, trace: Trace) -> Result<(), anyhow::Error> {
         
         Ok(())
     }
