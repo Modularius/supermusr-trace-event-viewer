@@ -121,122 +121,33 @@ async fn main() -> anyhow::Result<()> {
 
     let trace_finder = Finder::<'_,TraceMessage>::new(&args.topics.trace_topic);
     let eventlist_finder = Finder::<'_,EventListMessage>::new(&args.topics.digitiser_event_topic);
-    let find_engine = FindEngine::new(&consumer, &args.select.step);
-    let traces = find_engine.find(&trace_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
-    let dig_id = traces.unwrap().d;
-    let eventlists = find_engine.find(&eventlist_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
-    //let timestamp = "2025-05-31 17:38:00.0 UTC".parse()?;
-    let tf = TraceFinderByKafkaTimestamp::new(&consumer, &args.topics.trace_topic);
-    let trace_finder = FindByDate::new(tf, &args.select.step);
-    let did = trace_finder.find(&args.topics, args.select.timestamp, args.select.channel);
+    let mut find_engine = FindEngine::new(&consumer, &args.select.step);
+    let trace = find_engine.find(&trace_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
+    let digitiser_id = trace.as_ref().expect("").digitiser_id();
+    let eventlist = find_engine.find(&eventlist_finder, 1, args.select.timestamp, |evlist|evlist.digitiser_id() == digitiser_id);
 
-    let (idx, tmstp) = trace_finder.find_first_index_with_timestamp_before(args.select.timestamp)?;
-    let first_message = get_next_message_with_timestamp_after(&consumer, &args.topics, &args.select.timestamp);
-    if let Some(first_message) = first_message {
-        let dig_msg = first_message.unpack_message(&args.topics).unwrap();
-        let timestamp: DateTime<Utc> = dig_msg.timestamp().unwrap();
-        info!("Seeking Timestamp {timestamp}");
-        let mut dig_id = None;
-        if let Some(did) = push_trace(&mut cache, args.select.channel, dig_msg) {
-            dig_id = Some(did);
-        } else {
-            for msg in consumer.iter() {
-                match msg {
-                    Ok(message) => 
-                        if let Some(dig_msg) = message.unpack_message(&args.topics) {
-                            if dig_msg.is_timestamp_equal_to(timestamp) {
-                                    if let Some(did) = push_trace(&mut cache, args.select.channel, dig_msg) {
-                                        dig_id = Some(did);
-                                        break;
-                                    }
-                            }
-                        },
-                    Err(_) => {},
-                }
-            }
-        }
+    if let Some((trace,eventlist)) = Option::zip(trace,eventlist) {
+        cache.push_trace(&trace.get_unpacked_message().expect(""));
+        cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
+        match args.mode {
+            Mode::File(output_to_file) => {
+                info!("Outputting {} Digitiser Traces", cache.iter_traces().len());
+                for (metadata, traces) in cache.iter_traces() {
+                    info!("Outputting Frame {:?} Traces", metadata);
+                    info!("Outputting {} Traces", traces.traces.len());
+                    for (channel, trace) in &traces.traces {
+                        info!("Outputting Channel {channel}");
+                        let mut bounds = Bounds::from_trace(&trace).expect("");
+                        bounds.ammend_with_user_input(&args.bounds);
+                        let graph = BuildGraph::<BackendSVG<'_>>::new(800,600,bounds.time_range(), bounds.intensity_range());
 
-        if let Some(dig_id) = dig_id {
-            let ef = TraceFinderByKafkaTimestamp::new(&consumer, &args.topics.digitiser_event_topic);
-            let event_finder = FindByDate::new(ef, &args.select.step);
-
-            event_finder.find_first_index_with_timestamp_before(args.select.timestamp)?;
-            let first_message = get_next_message_with_timestamp_after(&consumer, &args.topics, &args.select.timestamp);
-            if let Some(first_message) = first_message {
-                let dig_msg = first_message.unpack_message(&args.topics).unwrap();
-                let timestamp: DateTime<Utc> = dig_msg.timestamp().unwrap();
-                info!("Seeking Timestamp {timestamp}");
-                if push_event_list_if_valid(&mut cache,dig_id,dig_msg).is_none() {
-                    for msg in consumer.iter() {
-                        match msg {
-                            Ok(message) => 
-                                if let Some(dig_msg) = message.unpack_message(&args.topics) {
-                                    if dig_msg.is_timestamp_equal_to(timestamp) {
-                                        if push_event_list_if_valid(&mut cache,dig_id,dig_msg).is_some() {
-                                            break;
-                                        }
-                                    }
-                                },
-                            Err(_) => {},
-                        }
+                        let path_buf = graph.build_path(&output_to_file.path, metadata, *channel).expect("extension should write");
+                        let eventlist = traces.events.as_ref().and_then(|ev|ev.get(channel));
+                        graph.save_trace_graph(&path_buf, &trace, eventlist).expect("");
                     }
                 }
-            }
+            },
         }
-    }
-
-
-    
-    match args.mode {
-        Mode::File(output_to_file) => {
-            info!("Outputting {} Digitiser Traces", cache.iter_traces().len());
-            for (metadata, traces) in cache.iter_traces() {
-                info!("Outputting Frame {:?} Traces", metadata);
-                info!("Outputting {} Traces", traces.traces.len());
-                for (channel, trace) in &traces.traces {
-                    info!("Outputting Channel {channel}");
-                    let mut bounds = Bounds::from_trace(&trace).expect("");
-                    bounds.ammend_with_user_input(&args.bounds);
-                    let graph = BuildGraph::<BackendSVG<'_>>::new(800,600,bounds.time_range(), bounds.intensity_range());
-
-                    let path_buf = graph.build_path(&output_to_file.path, metadata, *channel).expect("extension should write");
-                    let eventlist = traces.events.as_ref().and_then(|ev|ev.get(channel));
-                    graph.save_trace_graph(&path_buf, &trace, eventlist).expect("");
-                }
-            }
-        },
     }
     Ok(())
-}
-
-
-fn push_event_list_if_valid(cache: &mut Cache, dig_id: DigitizerId, dig_msg: DigitizerMessage) -> Option<()> {
-    if let DigitizerMessage::EventList(dig_eventlist_msg) = dig_msg {
-        info!("Found EventList");
-        if dig_eventlist_msg.digitizer_id() == dig_id {
-            info!("Push EventList");
-            cache.push_event_list_to_trace(&dig_eventlist_msg);
-            Some(())
-        } else {
-            None
-        }
-    } else {
-        unreachable!()
-    }
-}
-
-fn get_next_message_with_timestamp_after<'a>(consumer: &'a BaseConsumer, topics: &Topics, timestamp: &DateTime<Utc>) -> Option<BorrowedMessage<'a>> {
-    for msg in consumer.iter() {
-        match msg {
-            Ok(message) => 
-                if let Some(dig_msg) = message.unpack_message(topics) {
-                    if dig_msg.timestamp()
-                        .is_some_and(|ts : DateTime<Utc>|ts > *timestamp) {
-                            return Some(message);
-                    }
-                }
-            Err(_) => {},
-        }
-    }
-    None
 }

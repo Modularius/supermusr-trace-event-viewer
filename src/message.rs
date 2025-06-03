@@ -57,11 +57,17 @@ impl<'a> FBMessage<'a> for TraceMessage<'a> {
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp
     }
+
+    fn digitiser_id(&self) -> DigitizerId {
+        self.digitiser_id
+    }
 }
 
 pub(crate) struct EventListMessage<'a> {
     message: BorrowedMessage<'a>,
-    timestamp: DateTime<Utc>
+    timestamp: DateTime<Utc>,
+    digitiser_id: DigitizerId,
+
 }
 
 impl<'a> FBMessage<'a> for EventListMessage<'a> {
@@ -81,14 +87,21 @@ impl<'a> FBMessage<'a> for EventListMessage<'a> {
             .map(Result::ok)
             .flatten()?;
 
+        let digitiser_id = evlist.digitizer_id();
+
         Some(Self {
             message,
-            timestamp
+            timestamp,
+            digitiser_id
         })
     }
 
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp
+    }
+
+    fn digitiser_id(&self) -> DigitizerId {
+        self.digitiser_id
     }
 }
 
@@ -145,4 +158,5 @@ pub(crate) trait FBMessage<'a> : Sized {
     fn from_borrowed_message(message: BorrowedMessage<'a>) -> Option<Self>;
     fn get_unpacked_message(&'a self) -> Option<Self::UnpackedMessage>;
     fn timestamp(&self) -> DateTime<Utc>;
+    fn digitiser_id(&self) -> DigitizerId;
 }
