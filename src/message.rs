@@ -14,6 +14,16 @@ use supermusr_streaming_types::{
     }
 };
 
+pub(crate) trait FBMessage<'a> : Sized {
+    type UnpackedMessage;
+
+    fn from_borrowed_message(message: BorrowedMessage<'a>) -> Option<Self>;
+    fn get_unpacked_message(&'a self) -> Option<Self::UnpackedMessage>;
+    fn timestamp(&self) -> DateTime<Utc>;
+    fn digitiser_id(&self) -> DigitizerId;
+}
+
+
 pub(crate) struct TraceMessage<'a> {
     message: BorrowedMessage<'a>,
     timestamp: DateTime<Utc>,
@@ -67,7 +77,6 @@ pub(crate) struct EventListMessage<'a> {
     message: BorrowedMessage<'a>,
     timestamp: DateTime<Utc>,
     digitiser_id: DigitizerId,
-
 }
 
 impl<'a> FBMessage<'a> for EventListMessage<'a> {
@@ -104,7 +113,7 @@ impl<'a> FBMessage<'a> for EventListMessage<'a> {
         self.digitiser_id
     }
 }
-
+/*
 fn unpack_message<'a, F, G, M>(
     message: &'a BorrowedMessage<'a>,
     topic: &str,
@@ -124,7 +133,7 @@ where
     }
     None
 }
-
+ */
 pub(crate) trait UnpackMessage<'a> {
     /*fn unpack_message(&'a self, topics: &'a Topics) -> Option<DigitizerMessage<'a>> {
         self.unpack_trace_message(&topics.trace_topic)
@@ -150,13 +159,4 @@ impl<'a> UnpackMessage<'a> for BorrowedMessage<'a> {
             .filter(|payload|digitizer_event_list_message_buffer_has_identifier(payload))
             .and_then(|payload|root_as_digitizer_event_list_message(payload).ok())
     }
-}
-
-pub(crate) trait FBMessage<'a> : Sized {
-    type UnpackedMessage;
-
-    fn from_borrowed_message(message: BorrowedMessage<'a>) -> Option<Self>;
-    fn get_unpacked_message(&'a self) -> Option<Self::UnpackedMessage>;
-    fn timestamp(&self) -> DateTime<Utc>;
-    fn digitiser_id(&self) -> DigitizerId;
 }

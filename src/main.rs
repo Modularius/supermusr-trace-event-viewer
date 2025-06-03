@@ -1,13 +1,12 @@
 //!
 //!
-use build_graph::{BackendSVG, BuildGraph};
+use graphics::{BackendSVG, BuildGraph};
 use cache::Cache;
-use chrono::{DateTime, Utc};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::Parser;
 use cli_structs::{CollectType, Select, Mode, Topics, UserBounds};
 use data::Bounds;
 use finder::{FindEngine, Finder};
-use message::{FBMessage, UnpackMessage};
+use message::FBMessage;
 //use engine::Engine;
 //use finder::Finder;
 use supermusr_common::{
@@ -15,23 +14,22 @@ use supermusr_common::{
 };
 //use cache::Cache;
 use rdkafka::{
-    consumer::{BaseConsumer, CommitMode, Consumer}, error::KafkaError, message::BorrowedMessage
+    consumer::{BaseConsumer, Consumer}, error::KafkaError
 };
-use supermusr_streaming_types::dev2_digitizer_event_v2_generated::digitizer_event_list_message_buffer_has_identifier;
-use std::{net::SocketAddr, path::PathBuf, time::Duration};
+use std::net::SocketAddr;
 use tracing::{info,warn};
 
-use crate::{data::EventList, message::{EventListMessage, TraceMessage}};
+use message::{EventListMessage, TraceMessage};
 
 mod cli_structs;
 mod data;
 mod output;
-mod build_graph;
+mod graphics;
 mod cache;
 //mod engine;
-mod message_handling;
 mod finder;
 mod message;
+mod tui;
 
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
@@ -118,6 +116,15 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     let mut cache = Cache::default();
+
+    // Set up terminal.
+    crossterm::terminal::enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut tui = Tui::new();
 
     let trace_finder = Finder::<'_,TraceMessage>::new(&args.topics.trace_topic);
     let eventlist_finder = Finder::<'_,EventListMessage>::new(&args.topics.digitiser_event_topic);
