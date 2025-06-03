@@ -1,5 +1,6 @@
 //!
 //!
+use crossterm::{event::EnableMouseCapture, execute, terminal::{self, EnterAlternateScreen}};
 use graphics::{BackendSVG, BuildGraph};
 use cache::Cache;
 use clap::Parser;
@@ -7,12 +8,10 @@ use cli_structs::{CollectType, Select, Mode, Topics, UserBounds};
 use data::Bounds;
 use finder::{FindEngine, Finder};
 use message::FBMessage;
-//use engine::Engine;
-//use finder::Finder;
+use ratatui::{layout::Layout, prelude::CrosstermBackend, Terminal};
 use supermusr_common::{
     init_tracer, tracer::{TracerEngine, TracerOptions}, Channel, CommonKafkaOpts, DigitizerId
 };
-//use cache::Cache;
 use rdkafka::{
     consumer::{BaseConsumer, Consumer}, error::KafkaError
 };
@@ -20,6 +19,8 @@ use std::net::SocketAddr;
 use tracing::{info,warn};
 
 use message::{EventListMessage, TraceMessage};
+
+use crate::tui::App;
 
 mod cli_structs;
 mod data;
@@ -118,13 +119,19 @@ async fn main() -> anyhow::Result<()> {
     let mut cache = Cache::default();
 
     // Set up terminal.
-    crossterm::terminal::enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    terminal::enable_raw_mode()?;
+    let mut stdout = std::io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut tui = Tui::new();
+    let mut app = App::new();
+
+    loop {
+        if app.changed() {
+            terminal.draw(|frame|frame.render_widget(&app, frame.size()))?;
+        }
+    }
 
     let trace_finder = Finder::<'_,TraceMessage>::new(&args.topics.trace_topic);
     let eventlist_finder = Finder::<'_,EventListMessage>::new(&args.topics.digitiser_event_topic);
