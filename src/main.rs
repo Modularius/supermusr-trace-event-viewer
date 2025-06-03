@@ -116,7 +116,6 @@ async fn main() -> anyhow::Result<()> {
         None,
     )?;
 
-    let mut cache = Cache::default();
 
     // Set up terminal.
     terminal::enable_raw_mode()?;
@@ -125,17 +124,13 @@ async fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
+    let mut app = App::new(&consumer, &args.topics);
 
     loop {
         if app.changed() {
-            terminal.draw(|frame|frame.render_widget(&app, frame.size()))?;
+            terminal.draw(|frame|frame.render_widget(app, frame.size()))?;
         }
     }
-
-    let trace_finder = Finder::<'_,TraceMessage>::new(&args.topics.trace_topic);
-    let eventlist_finder = Finder::<'_,EventListMessage>::new(&args.topics.digitiser_event_topic);
-    let mut find_engine = FindEngine::new(&consumer, &args.select.step);
     let trace = find_engine.find(&trace_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
     let digitiser_id = trace.as_ref().expect("").digitiser_id();
     let eventlist = find_engine.find(&eventlist_finder, 1, args.select.timestamp, |evlist|evlist.digitiser_id() == digitiser_id);

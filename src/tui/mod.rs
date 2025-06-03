@@ -1,38 +1,17 @@
-use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
+mod app;
+mod tabs;
 
-pub(crate) struct App {
+pub(crate) use app::App;
+use ratatui::layout::Rect;
 
-}
-
-impl App {
-    pub(crate) fn new() -> Self {
-        App{}
+pub(crate) trait Component {
+    fn handle_key_press(&mut self) {
     }
-}
 
-impl Widget for App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        
+    fn update(&mut self) {
     }
-}
 
-trait Tab : Widget {
-    pub(crate) fn new() -> Self {
-        App{}
-    }
-}
-
-struct IntroTab {
-}
-
-impl Widget for IntroTab {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        
-    }
-}
-
-impl Tab for IntroTab {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    fn render(&self, area: Rect) {
         
     }
 }
