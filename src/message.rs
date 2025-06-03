@@ -1,12 +1,32 @@
 use chrono::{DateTime, Utc};
 use rdkafka::{message::BorrowedMessage, Message};
-use supermusr_common::DigitizerId;
-use supermusr_streaming_types::{dat2_digitizer_analog_trace_v2_generated::{digitizer_analog_trace_message_buffer_has_identifier, root_as_digitizer_analog_trace_message, DigitizerAnalogTraceMessage}, dev2_digitizer_event_v2_generated::{digitizer_event_list_message_buffer_has_identifier, root_as_digitizer_event_list_message, DigitizerEventListMessage}};
+use supermusr_common::{Channel, DigitizerId};
+use supermusr_streaming_types::{
+    dat2_digitizer_analog_trace_v2_generated::{
+        digitizer_analog_trace_message_buffer_has_identifier,
+        root_as_digitizer_analog_trace_message,
+        DigitizerAnalogTraceMessage
+    },
+    dev2_digitizer_event_v2_generated::{
+        digitizer_event_list_message_buffer_has_identifier,
+        root_as_digitizer_event_list_message,
+        DigitizerEventListMessage
+    }
+};
 
 pub(crate) struct TraceMessage<'a> {
     message: BorrowedMessage<'a>,
     timestamp: DateTime<Utc>,
     digitiser_id: DigitizerId,
+}
+
+impl<'a> TraceMessage<'a> {
+    pub(crate) fn has_channel(&self, channel: Channel) -> bool {
+        self.get_unpacked_message()
+            .and_then(|d|d.channels())
+            .and_then(|c|c.iter().find(|c|c.channel() == channel))
+            .is_some()
+    }
 }
 
 impl<'a> FBMessage<'a> for TraceMessage<'a> {

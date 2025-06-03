@@ -6,8 +6,8 @@ use chrono::{DateTime, Utc};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use cli_structs::{CollectType, Select, Mode, Topics, UserBounds};
 use data::Bounds;
-use finder::{FindByDate, TraceFinderByKafkaTimestamp};
-use message::{DigitizerMessage, UnpackMessage};
+use finder::{FindEngine, Finder};
+use message::{FBMessage, UnpackMessage};
 //use engine::Engine;
 //use finder::Finder;
 use supermusr_common::{
@@ -17,8 +17,11 @@ use supermusr_common::{
 use rdkafka::{
     consumer::{BaseConsumer, CommitMode, Consumer}, error::KafkaError, message::BorrowedMessage
 };
+use supermusr_streaming_types::dev2_digitizer_event_v2_generated::digitizer_event_list_message_buffer_has_identifier;
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 use tracing::{info,warn};
+
+use crate::{data::EventList, message::{EventListMessage, TraceMessage}};
 
 mod cli_structs;
 mod data;
@@ -116,6 +119,12 @@ async fn main() -> anyhow::Result<()> {
 
     let mut cache = Cache::default();
 
+    let trace_finder = Finder::<'_,TraceMessage>::new(&args.topics.trace_topic);
+    let eventlist_finder = Finder::<'_,EventListMessage>::new(&args.topics.digitiser_event_topic);
+    let find_engine = FindEngine::new(&consumer, &args.select.step);
+    let traces = find_engine.find(&trace_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
+    let dig_id = traces.unwrap().d;
+    let eventlists = find_engine.find(&eventlist_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
     //let timestamp = "2025-05-31 17:38:00.0 UTC".parse()?;
     let tf = TraceFinderByKafkaTimestamp::new(&consumer, &args.topics.trace_topic);
     let trace_finder = FindByDate::new(tf, &args.select.step);

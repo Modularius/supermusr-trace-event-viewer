@@ -17,7 +17,10 @@ fn get_timestamp_at_index(consumer: &BaseConsumer, topic: &str, index: Index) ->
     tpl.add_partition_offset(topic, 0, offset)?;
     consumer.assign(&tpl)?;
     match consumer.poll(None) {
-        Some(res) => res?.timestamp().to_millis().and_then(Timestamp::from_timestamp_millis).ok_or(anyhow::anyhow!("No Message Found")),
+        Some(res) => res?.timestamp()
+            .to_millis()
+            .and_then(Timestamp::from_timestamp_millis)
+            .ok_or(anyhow::anyhow!("No Message Found")),
         None => Err(anyhow::anyhow!("No Message Polled")),
     }
 }
@@ -140,6 +143,7 @@ impl<F: FinderByTimestamp> FindByDate<F> {
         }
     }
  
+    // Seeks through the kafka topic for the first 
     pub(crate) fn find_first_index_with_timestamp_before(&self, target_timestamp: Timestamp) -> anyhow::Result<(Index,Timestamp)> {
         let mut index = 1;
         let mut earliest_timestamp = self.finder.get_timestamp_at_index(index)?;
@@ -151,16 +155,18 @@ impl<F: FinderByTimestamp> FindByDate<F> {
         Ok((index, earliest_timestamp))
     }
 
-    pub(crate) fn find_last_index_with_timestamp_after(&self, start: Index, step: Index, target_timestamp: Timestamp) -> anyhow::Result<(Index,Timestamp)> {
+    /// Jumps through the consumer in steps of size `step_size` until it finds the 
+    /// 
+    pub(crate) fn find_last_index_with_timestamp_after(&self, start: Index, step_size: Index, target_timestamp: Timestamp) -> anyhow::Result<(Index,Timestamp)> {
         let mut index = start;
         let mut earliest_timestamp = self.finder.get_timestamp_at_index(index)?;
         while earliest_timestamp > target_timestamp {
             info!("{index}, {earliest_timestamp}");
-            let new_timestamp = self.finder.get_timestamp_at_index(index + step)?;
+            let new_timestamp = self.finder.get_timestamp_at_index(index + step_size)?;
             if new_timestamp <= target_timestamp {
                 break;
             } else {
-                index += step;
+                index += step_size;
                 earliest_timestamp = new_timestamp;
             }
         }
