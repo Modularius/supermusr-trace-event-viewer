@@ -1,6 +1,6 @@
 //!
 //!
-use crossterm::{event::EnableMouseCapture, execute, terminal::{self, EnterAlternateScreen}};
+use crossterm::{event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers}, execute, terminal::{self, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
 use graphics::{BackendSVG, BuildGraph};
 use cache::Cache;
 use clap::Parser;
@@ -15,12 +15,13 @@ use supermusr_common::{
 use rdkafka::{
     consumer::{BaseConsumer, Consumer}, error::KafkaError
 };
-use std::net::SocketAddr;
+use tokio::{signal::unix::{signal, SignalKind}, time};
+use std::{net::SocketAddr, thread};
 use tracing::{info,warn};
 
 use message::{EventListMessage, TraceMessage};
 
-use crate::tui::App;
+use crate::tui::{App, Component};
 
 mod cli_structs;
 mod data;
@@ -126,11 +127,47 @@ async fn main() -> anyhow::Result<()> {
 
     let mut app = App::new(&consumer, &args.topics);
 
+    let mut sigint = signal(SignalKind::interrupt())?;
+
+    //let (tx, rx) = mpsc::channel();
+    let mut update_interval =
+        tokio::time::interval(time::Duration::from_millis(100));
+
     loop {
-        if app.changed() {
-            terminal.draw(|frame|frame.render_widget(app, frame.size()))?;
+        tokio::select! {
+            _ = update_interval.tick() => {
+                
+                if event::poll(time::Duration::from_millis(10)).is_ok() {
+                    if let Event::Key(key) =
+                        event::read().expect("should be able to read an event after a successful poll")
+                    {
+                        app.handle_key_press(key);
+                        if app.is_quit() {
+                            break;
+                        }
+                    }
+                }
+                if app.changed() {
+                    terminal.draw(|frame|app.render(frame, frame.size()))?;
+                    app.acknowledge_change();
+                }
+            },
+            _ = sigint.recv() => {
+                break;
+            }
         }
+
     }
+    // Clean up terminal.
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+    terminal.clear()?;
+    /*
     let trace = find_engine.find(&trace_finder, 1, args.select.timestamp, |x|x.has_channel(args.select.channel));
     let digitiser_id = trace.as_ref().expect("").digitiser_id();
     let eventlist = find_engine.find(&eventlist_finder, 1, args.select.timestamp, |evlist|evlist.digitiser_id() == digitiser_id);
@@ -157,6 +194,6 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
         }
-    }
+    } */
     Ok(())
 }
