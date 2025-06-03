@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 //pub(crate) use find_by_date::{FindByDate, TraceFinderByKafkaTimestamp};
 
 use rdkafka::{consumer::{BaseConsumer, Consumer}, message::BorrowedMessage, Message, Offset, TopicPartitionList};
+use tracing::info;
 
 use crate::{cli_structs::Steps, message::FBMessage};
 
@@ -75,11 +76,13 @@ impl<'a> FindEngine<'a> {
     fn set_offset<F : FinderType<'a>>(&mut self, finder: &F, offset: i64) {
         self.tpl
             .set_partition_offset(finder.topic(), 0, Offset::OffsetTail(offset))
-            .unwrap();
+            .expect("");
 
         self.consumer
             .assign(&self.tpl)
-            .unwrap();
+            .expect("");
+
+        info!("Set offset to {offset}")
     }
 
     fn get_current_message<F : FBMessage<'a>>(&mut self) -> Option<F> {
@@ -112,6 +115,7 @@ impl<'a> FindEngine<'a> {
     // Seeks through the kafka topic for the first 
     fn set_offset_to_first_index_with_timestamp_before<F : FinderType<'a>>(&mut self, finder: &F, start: i64, target: Timestamp) -> Option<(i64,Timestamp)> {
         let mut index = start;
+        self.set_offset(finder, index);
         let mut earliest = self.get_current_message::<F::Msg>()?.timestamp();
         for step in (0..self.steps.num_step_passes).rev() {
             let step_size = self.steps.min_step_size*self.steps.step_mul_coef.pow(step);
@@ -134,6 +138,7 @@ impl<'a> FindEngine<'a> {
 
     pub(crate) fn find<F : FinderType<'a>, Filter>(&mut self, finder: &F, start: i64, target: Timestamp, filter: Filter) -> Option<F::Msg>
     where Filter: Fn(&F::Msg)->bool {
+        self.setup(finder);
         self.set_offset_to_first_index_with_timestamp_before(finder, start, target);
         let message = self.poll_for_next_message_with_timestamp_after_or_equal::<F::Msg>(target)?;
 
