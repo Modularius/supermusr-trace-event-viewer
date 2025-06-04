@@ -1,6 +1,17 @@
+use std::io::Stdout;
+
+use chrono::{DateTime, Utc};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::{layout::Rect, prelude::CrosstermBackend, style::{Color, Style}, widgets::List, Frame};
+use rdkafka::consumer::BaseConsumer;
+
+use crate::{data::{DigitiserMetadata, DigitiserTrace}, Cache, Component};
+
 use supermusr_common::{Channel, DigitizerId};
 
+#[derive(Default)]
 enum Focus {
+    #[default]
     TimestampFrom,
     TimestampTo,
     Channels,
@@ -17,10 +28,14 @@ pub(crate) struct Setup{
 }
 
 impl Setup {
-    pub(crate) fn new(consumer: &BaseConsumer, topics: &Topics) -> Self {
-        App{
+    pub(crate) fn new() -> Self {
+        Setup {
             changed: true,
             focus: Default::default(),
+            from: Default::default(),
+            to: Default::default(),
+            channels: Default::default(),
+            digitisers: Default::default(),
         }
     }
 }
@@ -43,7 +58,6 @@ impl Component for Setup {
             self.changed = true;
         } else {
         }
-        self.changed
     }
 
     fn update(&mut self) {

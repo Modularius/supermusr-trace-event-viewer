@@ -6,7 +6,7 @@ use rdkafka::consumer::BaseConsumer;
 
 use crate::{tui::{controls::Controls, graph::Graph, results::Results, setup::Setup, Component}, Cache, Topics};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 enum Focus {
     #[default]
     Setup,
@@ -20,7 +20,11 @@ pub(crate) struct App<'a> {
     consumer: &'a BaseConsumer,
     topics: &'a Topics,
     cache: Cache,
-    focus: Focus
+    focus: Focus,
+    setup: Setup,
+    controls: Controls,
+    results: Results,
+    graph: Graph<'a>
 }
 
 impl<'a> App<'a> {
@@ -32,15 +36,24 @@ impl<'a> App<'a> {
             topics,
             cache: Cache::default(),
             focus: Default::default(),
-            setup: Setup,
-            controls: Controls,
-            results: Results<'a>,
-            graph: Graph<'a>,
+            setup: Setup::new(),
+            controls: Controls::new(),
+            results: Results::new(),
+            graph: Graph::new(),
         }
     }
 
     pub(crate) fn is_quit(&self) -> bool {
         self.quit
+    }
+
+    fn get_border_colour(&self, component: &Focus) -> Color {
+        match (self.focus.clone(), component) {
+            (Focus::Setup, Focus::Setup) => Color::Cyan,
+            (Focus::Controls, Focus::Controls) => Color::Cyan,
+            (Focus::Results, Focus::Results) => Color::Cyan,
+            _ => Color::Black
+        }
     }
 }
 
@@ -53,13 +66,9 @@ impl<'a> Component for App<'a> {
         self.changed = false;
     }
 
-    fn handle_key_press(&mut self, key: KeyEvent) -> bool {
+    fn handle_key_press(&mut self, key: KeyEvent) {
         if key == KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE) {
             self.quit = true;
-        } else if key == KeyEvent::new(KeyCode::Up, KeyModifiers::NONE) {
-
-        } else if key == KeyEvent::new(KeyCode::Down, KeyModifiers::NONE) {
-
         } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
             self.focus = match self.focus {
                 Focus::Setup => Focus::Controls,
@@ -68,11 +77,12 @@ impl<'a> Component for App<'a> {
             };
             self.changed = true;
         } else {
-            let has_changed = match self.focus {
-                Focus::Setup => self.controls.,
-                Focus::Controls => Focus::Results,
-                Focus::Results => Focus::Setup,
-            };
+            match self.focus {
+                Focus::Setup => self.setup.handle_key_press(key),
+                Focus::Controls => self.controls.handle_key_press(key),
+                Focus::Results => self.results.handle_key_press(key),
+            }
+            self.changed = self.setup.changed() || self.controls.changed() || self.results.changed();
         }
     }
 
@@ -80,31 +90,32 @@ impl<'a> Component for App<'a> {
     }
 
     fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        let (setup, display) = {
+        let (setup, controls, display) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(4), Constraint::Min(0)])
+                .constraints([Constraint::Length(8), Constraint::Length(4), Constraint::Min(0)])
                 .split(area);
-                (chunk[0], chunk[1])
+                (chunk[0], chunk[1], chunk[2])
         };
 
         {
             let block = Block::new()
                 .title(Title::default().alignment(Alignment::Center).content("Setup"))
                 .borders(Borders::ALL)
-                .border_style(Style::new().fg(match self.focus { Focus::Setup => Color::Blue, _ => Color::Black}))
-                .style(Style::new().bg(Color::Gray));
-            
-            frame.render_widget(block, setup);
+                .border_style(Style::new().fg(self.get_border_colour(&Focus::Setup)))
+                .style(Style::new().bg(Color::LightGreen));
+            frame.render_widget(block.clone(), setup);
+            self.setup.render(frame,block.inner(setup));
         }
         
         {
             let block = Block::new()
                 .borders(Borders::ALL)
-                .border_style(Style::new().fg(match self.focus { Focus::Controls => Color::Blue, _ => Color::Black}))
-                .style(Style::new().bg(Color::Gray));
+                .border_style(Style::new().fg(self.get_border_colour(&Focus::Controls)))
+                .style(Style::new().bg(Color::LightGreen));
 
-            self.controls.render(frame,controls);
+            frame.render_widget(block.clone(), controls);
+            self.controls.render(frame,block.inner(controls));
         }
 
 
@@ -120,30 +131,22 @@ impl<'a> Component for App<'a> {
             let block = Block::new()
                 .title(Title::default().alignment(Alignment::Center).content("Results"))
                 .borders(Borders::ALL)
-                .border_style(Style::new().fg(match self.focus { Focus::Results => Color::Blue, _ => Color::Black }))
-                .style(Style::new().bg(Color::Gray));
+                .border_style(Style::new().fg(self.get_border_colour(&Focus::Results)))
+                .style(Style::new().bg(Color::LightGreen));
             
-            let list = List::new([ListItem::new("Null"), ListItem::new("Also Null")])
-                .block(block)
-                .highlight_style(Style::new().bg(Color::Cyan))
-                .highlight_symbol(">");
-
+            frame.render_widget(block.clone(), results);
             self.results.render(frame, block.inner(results));
-            frame.render_widget(list, results);
         }
 
         {
             let block = Block::new()
                 .title(Title::default().alignment(Alignment::Center).content("Graph"))
                 .borders(Borders::all())
-                .border_style(Style::new().fg(Color::DarkGray))
-                .style(Style::new().bg(Color::Gray));
+                .border_style(Style::new().fg(Color::Black))
+                .style(Style::new().bg(Color::LightGreen));
             
+            frame.render_widget(block.clone(), graph);
             self.graph.render(frame, block.inner(graph));
-            
-
-            self.graph.render(frame,display);
-            frame.render_widget(block, graph);
         }
     }
 }

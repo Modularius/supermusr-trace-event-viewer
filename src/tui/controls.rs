@@ -1,3 +1,13 @@
+use std::io::Stdout;
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::{layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, widgets::List, Frame};
+
+use crate::{data::{DigitiserMetadata, DigitiserTrace}, Cache, Component};
+
+enum Focus {
+    Blob
+}
 
 pub(crate) struct Controls{
     changed: bool,
@@ -6,8 +16,9 @@ pub(crate) struct Controls{
 
 impl Controls {
     pub(crate) fn new() -> Self {
-        App{
+        Controls{
             changed: true,
+            focus: Focus::Blob,
         }
     }
 }
@@ -27,11 +38,6 @@ impl Component for Controls {
         } else if key == KeyEvent::new(KeyCode::Down, KeyModifiers::NONE) {
 
         } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
-            self.focus = match self.focus {
-                Focus::Setup => Focus::Controls,
-                Focus::Controls => Focus::Results,
-                Focus::Results => Focus::Setup,
-            };
             self.changed = true;
         } else {
         }
@@ -48,15 +54,5 @@ impl Component for Controls {
                 .split(area);
                 (chunk[0], chunk[1])
         };
-
-        {
-            let block = Block::new()
-                .title(Title::default().alignment(Alignment::Center).content("Setup"))
-                .borders(Borders::ALL)
-                .border_style(Style::new().fg(match self.focus { Focus::Setup => Color::Blue, _ => Color::Black}))
-                .style(Style::new().bg(Color::Gray));
-            
-            frame.render_widget(block, setup);
-        }
     }
 }

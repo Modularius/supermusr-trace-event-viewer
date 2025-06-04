@@ -11,11 +11,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{layout::Rect, prelude::CrosstermBackend, Frame};
 
 pub(crate) trait Component {
-    pub(crate) fn changed(&self) -> bool;
-    pub(crate) fn acknowledge_change(&mut self);
+    fn changed(&self) -> bool;
+    fn acknowledge_change(&mut self);
 
-    fn handle_key_press(&mut self, key: KeyEvent) -> bool {
-        false
+    fn handle_key_press(&mut self, key: KeyEvent) {
+        
     }
 
     fn update(&mut self) {
