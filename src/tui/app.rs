@@ -9,8 +9,7 @@ use ratatui::{
 use rdkafka::consumer::BaseConsumer;
 
 use crate::{
-    tui::{controls::Controls, graph::Graph, results::Results, setup::Setup, traits::{ComponentContainer}, Component, TuiComponent},
-    Cache, Topics,
+    cli_structs::Steps, data::Trace, finder::{FindEngine, Finder}, message::{EventListMessage, FBMessage, TraceMessage}, tui::{controls::Controls, graph::Graph, results::Results, setup::Setup, traits::ComponentContainer, Component, TuiComponent}, Cache, Select, Topics
 };
 
 use strum::{EnumIter, IntoEnumIterator};
@@ -27,6 +26,7 @@ pub(crate) struct App<'a> {
     quit: bool,
     consumer: &'a BaseConsumer,
     topics: &'a Topics,
+    select: &'a Select,
     cache: Cache,
     focus: Focus,
     setup: TuiComponent<Setup>,
@@ -36,12 +36,13 @@ pub(crate) struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    pub(crate) fn new(consumer: &'a BaseConsumer, topics: &'a Topics) -> Self {
+    pub(crate) fn new(consumer: &'a BaseConsumer, topics: &'a Topics, select: &'a Select) -> Self {
         App {
             changed: true,
             quit: false,
             consumer,
             topics,
+            select,
             cache: Cache::default(),
             focus: Default::default(),
             setup: Setup::new(),
@@ -53,6 +54,19 @@ impl<'a> App<'a> {
 
     pub(crate) fn is_quit(&self) -> bool {
         self.quit
+    }
+
+    fn search(&mut self) {
+        self.cache.clear(); 
+        let mut find_engine = FindEngine::new(self.consumer, &self.select.step);
+        let trace_finder : Finder<TraceMessage> = Finder::new(&self.topics.trace_topic);
+        let trace = find_engine.find(&trace_finder, 1, self.select.timestamp, |x|x.has_channel(self.select.channel)).expect("");
+        self.cache.push_trace(&trace.get_unpacked_message().expect("msg"));
+
+        let digitiser_id = trace.digitiser_id();
+        let eventlist_finder : Finder<EventListMessage> = Finder::new(&self.topics.trace_topic);
+        let eventlist = find_engine.find(&eventlist_finder, 1, self.select.timestamp, |evlist|evlist.digitiser_id() == digitiser_id).expect("");
+        self.cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect("msg"));
     }
 }
 
@@ -104,6 +118,17 @@ impl<'a> Component for App<'a> {
             self.focus = Focus::iter().cycle().skip(self.focus.clone() as usize + 1).next().expect("");
             self.give_focus();
             self.changed = true;
+        } else if key == KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE) {
+            match self.focus {
+                Focus::Setup => {
+                    self.search();
+                    self.results.underlying_mut().set(&self.cache);
+                },
+                Focus::Results => {
+
+                },
+            }
+            self.changed = true;
         } else {
             self.focused_component_mut().handle_key_press(key);
             self.changed = self.focused_component().changed();
@@ -118,8 +143,8 @@ impl<'a> Component for App<'a> {
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Length(8),
-                    Constraint::Length(4),
                     Constraint::Min(0),
+                    Constraint::Length(4),
                 ])
                 .split(area);
             (chunk[0], chunk[1], chunk[2])

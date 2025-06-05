@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::tui::{traits::{Component}, ComponentStyle, TuiComponent};
+use crate::{cache, tui::{traits::Component, ComponentStyle, TuiComponent}, Cache};
 
 pub(crate) struct Results {
     changed: bool,
@@ -29,6 +29,13 @@ impl Results {
         )
         .with_name("results")
     }
+
+    pub(crate) fn set(&mut self, cache: &Cache) {
+        self.list.clear();
+        for (metadata, traces) in cache.iter_traces() {
+            self.list.push(format!("{}: {}", metadata.timestamp, metadata.id));
+        }
+    }
 }
 
 impl Component for Results {
@@ -43,7 +50,6 @@ impl Component for Results {
     fn give_focus(&mut self) {}
     
     fn acknowledge_focus(&mut self) {}
-
 
     fn handle_key_press(&mut self, key: KeyEvent) {
         if key == KeyEvent::new(KeyCode::Up, KeyModifiers::NONE) {

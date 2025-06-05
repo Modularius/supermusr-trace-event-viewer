@@ -130,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(&consumer, &args.topics);
+    let mut app = App::new(&consumer, &args.topics, &args.select);
     app.give_focus();
 
     let mut sigint = signal(SignalKind::interrupt())?;
