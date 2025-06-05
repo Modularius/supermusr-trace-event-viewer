@@ -1,33 +1,39 @@
 //!
 //!
-use crossterm::{event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers}, execute, terminal::{self, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
-use graphics::{BackendSVG, BuildGraph};
 use cache::Cache;
 use clap::Parser;
-use cli_structs::{CollectType, Select, Mode, Topics, UserBounds};
-use data::Bounds;
-use finder::{FindEngine, Finder};
-use message::FBMessage;
-use ratatui::{layout::Layout, prelude::CrosstermBackend, Terminal};
-use supermusr_common::{
-    init_tracer, tracer::{TracerEngine, TracerOptions}, Channel, CommonKafkaOpts, DigitizerId
+use cli_structs::{CollectType, Mode, Select, Topics, UserBounds};
+use crossterm::{
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event
+    },
+    execute,
+    terminal::{self, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ratatui::{prelude::CrosstermBackend, Terminal};
 use rdkafka::{
-    consumer::{BaseConsumer, Consumer}, error::KafkaError
+    consumer::{BaseConsumer, Consumer},
+    error::KafkaError,
 };
-use tokio::{signal::unix::{signal, SignalKind}, time};
-use std::{net::SocketAddr, thread};
-use tracing::{info,warn};
-
-use message::{EventListMessage, TraceMessage};
+use std::net::SocketAddr;
+use supermusr_common::{
+    init_tracer,
+    tracer::{TracerEngine, TracerOptions},
+    CommonKafkaOpts,
+};
+use tokio::{
+    signal::unix::{signal, SignalKind},
+    time,
+};
+use tracing::warn;
 
 use crate::tui::{App, Component};
 
+mod cache;
 mod cli_structs;
 mod data;
-mod output;
 mod graphics;
-mod cache;
+mod output;
 //mod engine;
 mod finder;
 mod message;
@@ -82,12 +88,13 @@ pub fn create_default_consumer(
     topics_to_subscribe: Option<&[&str]>,
 ) -> Result<BaseConsumer, KafkaError> {
     // Setup consumer with arguments and default parameters.
-    let consumer: BaseConsumer = supermusr_common::generate_kafka_client_config(broker_address, username, password)
-        .set("group.id", consumer_group)
-        .set("enable.partition.eof", "false")
-        .set("session.timeout.ms", "6000")
-        .set("enable.auto.commit", "false")
-        .create()?;
+    let consumer: BaseConsumer =
+        supermusr_common::generate_kafka_client_config(broker_address, username, password)
+            .set("group.id", consumer_group)
+            .set("enable.partition.eof", "false")
+            .set("session.timeout.ms", "6000")
+            .set("enable.auto.commit", "false")
+            .create()?;
 
     // Subscribe to if topics are provided.
     if let Some(topics_to_subscribe) = topics_to_subscribe {
@@ -97,7 +104,6 @@ pub fn create_default_consumer(
 
     Ok(consumer)
 }
-
 
 /// Entry point.
 #[tokio::main]
@@ -117,7 +123,6 @@ async fn main() -> anyhow::Result<()> {
         None,
     )?;
 
-
     // Set up terminal.
     terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -126,17 +131,17 @@ async fn main() -> anyhow::Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = App::new(&consumer, &args.topics);
+    app.give_focus();
 
     let mut sigint = signal(SignalKind::interrupt())?;
 
     //let (tx, rx) = mpsc::channel();
-    let mut update_interval =
-        tokio::time::interval(time::Duration::from_millis(100));
+    let mut update_interval = tokio::time::interval(time::Duration::from_millis(100));
 
     loop {
         tokio::select! {
             _ = update_interval.tick() => {
-                
+
                 if event::poll(time::Duration::from_millis(10)).is_ok() {
                     if let Event::Key(key) =
                         event::read().expect("should be able to read an event after a successful poll")
@@ -148,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 if app.changed() {
+                    app.give_focus();
                     terminal.draw(|frame|app.render(frame, frame.size()))?;
                     app.acknowledge_change();
                 }
@@ -156,7 +162,6 @@ async fn main() -> anyhow::Result<()> {
                 break;
             }
         }
-
     }
     // Clean up terminal.
     disable_raw_mode()?;

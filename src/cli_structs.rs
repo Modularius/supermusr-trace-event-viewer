@@ -1,11 +1,9 @@
 use clap::{Args, Subcommand, ValueEnum};
-use supermusr_common::{Channel, DigitizerId, Intensity, Time};
+use supermusr_common::{Channel, Intensity, Time};
 
 use chrono::{DateTime, Utc};
 
 use crate::output::OutputToFile;
-
-
 
 #[derive(Clone, Debug, Args)]
 pub(crate) struct Topics {
@@ -37,12 +35,10 @@ pub(crate) struct UserBounds {
     pub(crate) intensity_max: Option<Intensity>,
 }
 
-
 #[derive(Clone, Subcommand)]
 pub(crate) enum Mode {
     /// Outputs image to file.
     File(OutputToFile),
-    
     // /// Outputs image to server.
     //Server(OutputToFile),
 }
@@ -75,14 +71,13 @@ pub(crate) struct Select {
     // /// The digitiser Id to search for.
     // #[clap(long)]
     // pub(crate) digitiser_id: DigitizerId,
-
     /// The channel to search for.
     #[clap(long)]
     pub(crate) channel: Channel,
 }
 
 #[derive(Clone, Debug, Args)]
-pub(crate) struct Steps {    
+pub(crate) struct Steps {
     /// The min step size that the Kafka searcher takes backwards in time when seeking the timestamp.
     #[clap(long, default_value = "50")]
     pub(crate) min_step_size: i64,

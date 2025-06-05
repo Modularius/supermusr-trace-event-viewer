@@ -1,58 +1,60 @@
 use std::io::Stdout;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, widgets::List, Frame};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    prelude::CrosstermBackend,
+    Frame,
+};
 
-use crate::{data::{DigitiserMetadata, DigitiserTrace}, Cache, Component};
+use crate::tui::{components::TextBox, traits::Component, ComponentStyle, TuiComponent};
 
 enum Focus {
-    Blob
+    Blob,
 }
 
-pub(crate) struct Controls{
-    changed: bool,
-    focus: Focus
+pub(crate) struct Controls {
+    is_changed: bool,
+    focus: Focus,
+    text: TuiComponent<TextBox>,
 }
 
 impl Controls {
-    pub(crate) fn new() -> Self {
-        Controls{
-            changed: true,
-            focus: Focus::Blob,
-        }
+    pub(crate) fn new() -> TuiComponent<Self> {
+        TuiComponent::new(
+            Controls {
+                is_changed: true,
+                text: TextBox::new(""),
+                focus: Focus::Blob,
+            },
+            ComponentStyle::selectable(),
+        )
+    }
+
+    pub(crate) fn set(&mut self, text: &str) {
+        self.text.underlying_mut().set(text);
+        self.is_changed = true;
     }
 }
 
 impl Component for Controls {
     fn changed(&self) -> bool {
-        self.changed
+        self.is_changed
     }
 
     fn acknowledge_change(&mut self) {
-        self.changed = false;
+        self.is_changed = false;
     }
+    
+    fn give_focus(&mut self) {}
+    
+    fn acknowledge_focus(&mut self) {}
 
-    fn handle_key_press(&mut self, key: KeyEvent) {
-        if key == KeyEvent::new(KeyCode::Up, KeyModifiers::NONE) {
+    fn handle_key_press(&mut self, key: KeyEvent) {}
 
-        } else if key == KeyEvent::new(KeyCode::Down, KeyModifiers::NONE) {
-
-        } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
-            self.changed = true;
-        } else {
-        }
-    }
-
-    fn update(&mut self) {
-    }
+    fn update(&mut self) {}
 
     fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        let (setup, display) = {
-            let chunk = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(4), Constraint::Min(0)])
-                .split(area);
-                (chunk[0], chunk[1])
-        };
+        self.text.render(frame, area)
     }
 }

@@ -15,6 +15,7 @@ flatbuffers = "25.2.10"
 plotters = { version = "0.3.7", default-features = false, features = ["plotters-svg", "svg_backend", "bitmap_encoder", "all_series", "bitmap_backend"] }
 ratatui = "0.22.0"
 rdkafka = { version = "0.37.0", features = ["cmake-build", "ssl", "gssapi", "sasl"] }
+strum = { version = "0.26.3", features = ["derive"] }
 supermusr-common = { path = "./../supermusr-data-pipeline/common" }
 supermusr-streaming-types = { path = "./../supermusr-data-pipeline/streaming-types" }
 tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal", "sync"] }

@@ -1,5 +1,8 @@
 //!
-use std::collections::{hash_map::{self, Entry}, HashMap};
+use std::collections::{
+    hash_map::{self, Entry},
+    HashMap,
+};
 use supermusr_common::{Intensity, Time};
 use supermusr_streaming_types::{
     dat2_digitizer_analog_trace_v2_generated::DigitizerAnalogTraceMessage,

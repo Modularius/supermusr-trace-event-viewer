@@ -1,10 +1,15 @@
 use std::io::Stdout;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{layout::Rect, prelude::CrosstermBackend, style::{Color, Style}, widgets::List, Frame};
+use crossterm::event::KeyEvent;
+use ratatui::{
+    layout::Rect,
+    prelude::CrosstermBackend,
+    Frame,
+};
 
-use crate::{data::{DigitiserMetadata, DigitiserTrace}, Cache, Component};
-
+use crate::{
+    data::DigitiserTrace, tui::{traits::Component, ComponentStyle, TuiComponent}
+};
 
 pub(crate) struct Graph<'a> {
     changed: bool,
@@ -12,11 +17,15 @@ pub(crate) struct Graph<'a> {
 }
 
 impl<'a> Graph<'a> {
-    pub(crate) fn new() -> Self {
-        Graph {
-            changed: true,
-            trace: None
-        }
+    pub(crate) fn new() -> TuiComponent<Self> {
+        TuiComponent::new(
+            Graph {
+                changed: true,
+                trace: None,
+            },
+            ComponentStyle::selectable(),
+        )
+        .with_name("graph")
     }
 }
 
@@ -28,15 +37,15 @@ impl<'a> Component for Graph<'a> {
     fn acknowledge_change(&mut self) {
         self.changed = false;
     }
+    
+    fn give_focus(&mut self) {}
+    
+    fn acknowledge_focus(&mut self) {}
 
-    fn handle_key_press(&mut self, key: KeyEvent) {
-        
-    }
 
-    fn update(&mut self) {
-    }
+    fn handle_key_press(&mut self, key: KeyEvent) {}
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        
-    }
+    fn update(&mut self) {}
+
+    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {}
 }

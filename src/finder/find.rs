@@ -6,12 +6,12 @@ type Timestamp = DateTime<Utc>;
 pub(crate) enum State {
     TooEarly,
     WithinBuffer,
-    After
+    After,
 }
 
 pub(crate) struct Find {
     target: Timestamp,
-    /// 
+    ///
     time_precision: Duration,
     /// Ammount to subtract off the solution.
     offset_buffer: Index,
@@ -21,4 +21,3 @@ pub(crate) struct Find {
     current_index: Index,
     current_timestamp: Timestamp,
 }
-

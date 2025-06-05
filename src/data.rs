@@ -55,14 +55,15 @@ impl Bounds {
 
     pub(crate) fn from_digitiser_trace(trace: &DigitiserTrace) -> Option<Self> {
         let mut bounds = trace.traces.values().map(Self::from_trace).flatten();
-        let trace_bound = bounds
-            .next()
-            .map(|first| bounds.fold(first, Self::merge));
+        let trace_bound = bounds.next().map(|first| bounds.fold(first, Self::merge));
 
-        if let Some(event_bound) = trace.events.as_ref().map(|events| {
-            Self::from_digitiser_events_list(events)
-        }).flatten() {
-            trace_bound.map(|tb|tb.merge(event_bound))
+        if let Some(event_bound) = trace
+            .events
+            .as_ref()
+            .map(|events| Self::from_digitiser_events_list(events))
+            .flatten()
+        {
+            trace_bound.map(|tb| tb.merge(event_bound))
         } else {
             trace_bound
         }
@@ -108,11 +109,11 @@ impl Bounds {
     }
 
     pub(crate) fn time_range(&self) -> Range<f32> {
-        self.time_min as f32 .. self.time_max as f32
+        self.time_min as f32..self.time_max as f32
     }
 
     pub(crate) fn intensity_range(&self) -> Range<f32> {
-        self.intensity_min as f32 .. self.intensity_max as f32
+        self.intensity_min as f32..self.intensity_max as f32
     }
 }
 
