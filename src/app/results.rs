@@ -15,11 +15,11 @@ impl Results {
 }
 
 impl FocusableComponent for Results {
-    fn give_focus(&mut self) {
+    fn set_focus(&mut self, focus: bool) {
         todo!()
     }
-
-    fn remove_focus(&mut self) {
+    
+    fn propagate_parental_focus(&mut self, focus: bool) {
         todo!()
     }
 }

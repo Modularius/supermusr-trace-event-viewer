@@ -78,9 +78,18 @@ impl<'a, M : MessageFinder> Component for App<M> {
         if key == KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE) {
             self.quit = true;
         } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
-            self.focused_component_mut().remove_focus();
-            self.focus = Focus::iter().cycle().skip(self.focus.clone() as usize + 1).next().expect("");
-            self.focused_component_mut().give_focus();
+            
+            self.focused_component_mut()
+                .set_focus(false);
+
+            self.focus = Focus::iter().cycle()
+                .skip(self.focus.clone() as usize + 1)
+                .next()
+                .expect("");
+
+            self.focused_component_mut()
+                .set_focus(true);
+
         } else if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
             if let Some(search) = self.search.take() {
                 search.send_halt.send(()).expect("");
@@ -89,7 +98,9 @@ impl<'a, M : MessageFinder> Component for App<M> {
             match self.focus {
                 Focus::Setup => {
                     if self.search.is_none() {
-                        self.search = self.setup.underlying_mut().search(&mut self.message_finder);
+                        self.search = self.setup
+                            .underlying_mut()
+                            .search(&mut self.message_finder);
                     }
                 },
                 Focus::Results => {

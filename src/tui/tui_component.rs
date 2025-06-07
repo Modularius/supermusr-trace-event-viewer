@@ -7,8 +7,8 @@ use crate::tui::{builder::TuiComponentBuilder, style::ComponentStyle, BlockExt, 
 
 
 pub(crate) struct TuiComponent<C: Component + Sized> {
-    pub(crate) is_changed: bool,
-    pub(crate) has_focus: bool,
+    has_focus: bool,
+    parent_has_focus: bool,
     comp: C,
     config: TuiComponentBuilder,
 }
@@ -16,11 +16,15 @@ pub(crate) struct TuiComponent<C: Component + Sized> {
 impl<C: Component> TuiComponent<C> {
     pub(crate) fn new(comp: C, config: TuiComponentBuilder) -> Self {
         Self {
-            is_changed: true,
             has_focus: false,
+            parent_has_focus: false,
             comp,
             config,
         }
+    }
+    
+    pub(crate) fn has_focus(&self) -> bool {
+        self.has_focus
     }
 
     pub(crate) fn underlying_mut(&mut self) -> &mut C {
@@ -29,16 +33,15 @@ impl<C: Component> TuiComponent<C> {
 }
 
 impl<C: FocusableComponent> FocusableComponent for TuiComponent<C> {
-    fn give_focus(&mut self) {
-        self.has_focus = true;
-        self.comp.give_focus();
+    fn set_focus(&mut self, focus: bool) {
+        self.has_focus = focus;
+        self.comp.set_focus(focus);
     }
     
-    fn remove_focus(&mut self) {
-        self.has_focus = false;
-        self.comp.remove_focus();
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
+        self.comp.propagate_parental_focus(focus);
     }
-
 }
 
 impl<C: Component> Component for TuiComponent<C> {
@@ -51,13 +54,25 @@ impl<C: Component> Component for TuiComponent<C> {
     }
 
     fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        let block = Block::new()
-            .borders(Borders::ALL)
-            .set_title(self)
-            .set_border(self)
-            .style(self.config.style.main);
+        if self.config.is_in_block {
+            let block = Block::new()
+                .borders(Borders::ALL)
+                .set_title(self)
+                .set_border(self)
+                .style(
+                    if self.has_focus {
+                        *self.config.style.get_focus_border()
+                    } else if self.parent_has_focus {
+                        *self.config.style.get_parent_focus_border()
+                    } else {
+                        self.config.style.main
+                    }
+                );
 
-        frame.render_widget(block.clone(), area);
-        self.comp.render(frame, block.inner(area));
+            frame.render_widget(block.clone(), area);
+            self.comp.render(frame, block.inner(area));
+        } else {
+            self.comp.render(frame, area);
+        };
     }
 }

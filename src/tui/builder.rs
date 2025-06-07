@@ -10,7 +10,7 @@ pub(crate) struct TuiComponentBuilder {
     pub(crate) name: Option<&'static str>,
     pub(crate) selected_name: Option<&'static str>,
     pub(crate) style: ComponentStyle,
-    is_in_block: bool,
+    pub(crate) is_in_block: bool,
 }
 
 impl TuiComponentBuilder {

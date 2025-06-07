@@ -23,9 +23,9 @@ pub(crate) trait Component {
 
 pub(crate) trait FocusableComponent : Component {
 
-    fn give_focus(&mut self);
+    fn set_focus(&mut self, focus: bool);
     
-    fn remove_focus(&mut self);
+    fn propagate_parental_focus(&mut self, focus: bool);
 }
 
 pub(crate) trait BlockExt {
@@ -54,7 +54,7 @@ impl BlockExt for Block<'_> {
     }
 
     fn set_border<C : Component>(self, comp: &TuiComponent<C>) -> Self {
-        if comp.has_focus {
+        if comp.has_focus() {
             //self.border_style(comp.style.get_selected_border().clone())
             //    .border_type(BorderType::Rounded)
         } else {
