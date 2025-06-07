@@ -24,7 +24,7 @@ impl Cache {
         self.traces.clear();
         self.events.clear();
     }
-    
+
     pub(crate) fn push_trace(&mut self, msg: &DigitizerAnalogTraceMessage<'_>) {
         info!("New Trace");
         let metadata = DigitiserMetadata {

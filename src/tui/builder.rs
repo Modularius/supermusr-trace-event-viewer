@@ -1,10 +1,15 @@
 use std::{io::Stdout, rc::Rc};
 
 use crossterm::event::KeyEvent;
-use ratatui::{layout::Rect, prelude::CrosstermBackend, style::{Color, Style}, widgets::{Block, Borders}, Frame};
+use ratatui::{
+    layout::Rect,
+    prelude::CrosstermBackend,
+    style::{Color, Style},
+    widgets::{Block, Borders},
+    Frame,
+};
 
 use crate::tui::{style::ComponentStyle, BlockExt, Component, TuiComponent};
-
 
 pub(crate) struct TuiComponentBuilder {
     pub(crate) name: Option<&'static str>,
@@ -50,7 +55,7 @@ impl TuiComponentBuilder {
         }
     }
 
-    pub(crate) fn build<C : Component>(self, comp: C) -> TuiComponent<C> {
+    pub(crate) fn build<C: Component>(self, comp: C) -> TuiComponent<C> {
         TuiComponent::new(comp, self)
     }
 }

@@ -3,13 +3,20 @@ use std::sync::{Arc, Mutex};
 use rdkafka::consumer::BaseConsumer;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{finder::{searcher::Searcher, InitSearchResponse, MessageFinder, SearchStatus, SearchTarget}, messages::{Cache, CreateFromMessage, DigitiserEventList, DigitiserTrace, EventListMessage, FBMessage, TraceMessage}, Select, Topics};
+use crate::{
+    finder::{searcher::Searcher, InitSearchResponse, MessageFinder, SearchStatus, SearchTarget},
+    messages::{
+        Cache, CreateFromMessage, DigitiserEventList, DigitiserTrace, EventListMessage, FBMessage,
+        TraceMessage,
+    },
+    Select, Topics,
+};
 
 #[derive(Clone)]
 pub(crate) struct SearchEngine {
     consumer: Arc<Mutex<BaseConsumer>>,
     select: Arc<Mutex<Select>>,
-    topics: Arc<Mutex<Topics>>
+    topics: Arc<Mutex<Topics>>,
 }
 
 impl SearchEngine {
@@ -17,11 +24,15 @@ impl SearchEngine {
         Self {
             consumer: Arc::new(Mutex::new(consumer)),
             select: Arc::new(Mutex::new(select.clone())),
-            topics: Arc::new(Mutex::new(topics.clone()))
+            topics: Arc::new(Mutex::new(topics.clone())),
         }
     }
 
-    pub(crate) async fn search(&mut self, send_status: mpsc::Sender<SearchStatus>, target: SearchTarget) -> Cache {
+    pub(crate) async fn search(
+        &mut self,
+        send_status: mpsc::Sender<SearchStatus>,
+        target: SearchTarget,
+    ) -> Cache {
         let consumer = self.consumer.lock().expect("");
         let topics = &self.topics.lock().expect("");
 
@@ -35,35 +46,35 @@ impl SearchEngine {
         for step in (0..steps.num_step_passes).rev() {
             let sz = steps.min_step_size * steps.step_mul_coef.pow(step);
             iter.step_size(sz)
-                .backstep_until_time(|t|t > target.timestamp);
+                .backstep_until_time(|t| t > target.timestamp);
         }
 
-        let results : Vec<TraceMessage> = iter
+        let results: Vec<TraceMessage> = iter
             .collect()
             .iter_forward()
-            .move_until(|t|t >= target.timestamp)
-            .acquire_while(|msg|target.filter_trace_by_channel_and_digtiser_id(msg))
+            .move_until(|t| t >= target.timestamp)
+            .acquire_while(|msg| target.filter_trace_by_channel_and_digtiser_id(msg))
             .collect()
             .into();
 
         for trace in results.iter() {
             cache.push_trace(&trace.get_unpacked_message().expect(""));
         }
-        
+
         // Find Digitiser Event Lists
         let searcher = Searcher::new(&consumer, &topics.trace_topic, 1, send_status.clone());
         let mut iter = searcher.iter_backstep();
         for step in (0..steps.num_step_passes).rev() {
             let sz = steps.min_step_size * steps.step_mul_coef.pow(step);
             iter.step_size(sz)
-                .backstep_until_time(|t|t > target.timestamp);
+                .backstep_until_time(|t| t > target.timestamp);
         }
 
-        let results : Vec<EventListMessage> = iter
+        let results: Vec<EventListMessage> = iter
             .collect()
             .iter_forward()
-            .move_until(|t|t >= target.timestamp)
-            .acquire_while(|msg|target.filter_eventlist_digtiser_id(msg))
+            .move_until(|t| t >= target.timestamp)
+            .acquire_while(|msg| target.filter_eventlist_digtiser_id(msg))
             .collect()
             .into();
 
@@ -89,7 +100,7 @@ impl MessageFinder for SearchEngine {
                 if let Ok(()) = recv_halt.try_recv() {
                     return;
                 }
-                tokio::select!{
+                tokio::select! {
                     results = engine.search(send_status,target) => {
                         if let Err(_e) = send_finished.send(results) {
                             return;
@@ -99,11 +110,11 @@ impl MessageFinder for SearchEngine {
                 }
             }
         });
-        
+
         Some(InitSearchResponse {
             send_halt,
             recv_finished,
-            recv_status
+            recv_status,
         })
     }
 }

@@ -1,17 +1,15 @@
 //!
-//! 
-mod messages;
-mod finder;
-mod tui;
+//!
 mod app;
 mod cli_structs;
+mod finder;
+mod messages;
+mod tui;
 
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event
-    },
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{self, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -27,16 +25,22 @@ use supermusr_common::{
     CommonKafkaOpts,
 };
 use tokio::{
-    signal::unix::{signal, SignalKind}, sync::mpsc::{self, Receiver, Sender}, time
+    signal::unix::{signal, SignalKind},
+    sync::mpsc::{self, Receiver, Sender},
+    time,
 };
 use tracing::warn;
 
-use crate::{app::App, cli_structs::{Select, Topics, UserBounds}, finder::SearchEngine, tui::Component};
+use crate::{
+    app::App,
+    cli_structs::{Select, Topics, UserBounds},
+    finder::SearchEngine,
+    tui::Component,
+};
 
 type Timestamp = DateTime<Utc>;
 
 //use crate::{finder::finder_task, tui::{App, Component}};
-
 
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
@@ -69,7 +73,6 @@ struct Cli {
 
     #[clap(flatten)]
     select: Select,
-
     ///// Which data to collect.
     //#[clap(long)]
     //collect: CollectType,
@@ -134,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut sigint = signal(SignalKind::interrupt())?;
     //let finder_task_handle = tokio::spawn();
-  
+
     let mut update_interval = tokio::time::interval(time::Duration::from_millis(100));
 
     loop {

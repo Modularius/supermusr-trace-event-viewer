@@ -1,10 +1,13 @@
-mod searcher;
 mod engine;
+mod searcher;
 
 use supermusr_common::{Channel, DigitizerId};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{messages::{Cache, DigitiserTrace, EventListMessage, FBMessage, TraceMessage}, Timestamp};
+use crate::{
+    messages::{Cache, DigitiserTrace, EventListMessage, FBMessage, TraceMessage},
+    Timestamp,
+};
 
 pub(crate) use engine::SearchEngine;
 
@@ -14,14 +17,14 @@ pub(crate) struct InitSearchResponse {
     pub(crate) recv_status: mpsc::Receiver<SearchStatus>,
 }
 
-#[derive(Default,Clone)]
+#[derive(Default, Clone)]
 pub(crate) enum SearchStatus {
     #[default]
     Off,
     On,
 }
 
-#[derive(Default,Clone)]
+#[derive(Default, Clone)]
 pub(crate) struct SearchTarget {
     pub(crate) timestamp: Timestamp,
     pub(crate) channels: Vec<Channel>,
@@ -30,11 +33,17 @@ pub(crate) struct SearchTarget {
 
 impl SearchTarget {
     pub(crate) fn filter_trace_by_channel_and_digtiser_id(&self, msg: &TraceMessage) -> bool {
-        self.channels.iter().any(|&c|msg.has_channel(c)) || self.digitiser_ids.iter().any(|&d: &u8|msg.digitiser_id() == d)
+        self.channels.iter().any(|&c| msg.has_channel(c))
+            || self
+                .digitiser_ids
+                .iter()
+                .any(|&d: &u8| msg.digitiser_id() == d)
     }
 
     pub(crate) fn filter_eventlist_digtiser_id(&self, msg: &EventListMessage) -> bool {
-        self.digitiser_ids.iter().any(|&d: &u8|msg.digitiser_id() == d)
+        self.digitiser_ids
+            .iter()
+            .any(|&d: &u8| msg.digitiser_id() == d)
     }
 }
 

@@ -6,8 +6,14 @@ use rdkafka::{message::BorrowedMessage, Message};
 use std::{collections::HashMap, ops::Range};
 use supermusr_common::{Channel, DigitizerId, Intensity, Time};
 use supermusr_streaming_types::{
-    dat2_digitizer_analog_trace_v2_generated::{digitizer_analog_trace_message_buffer_has_identifier, root_as_digitizer_analog_trace_message, DigitizerAnalogTraceMessage},
-    dev2_digitizer_event_v2_generated::{digitizer_event_list_message_buffer_has_identifier, root_as_digitizer_event_list_message, DigitizerEventListMessage},
+    dat2_digitizer_analog_trace_v2_generated::{
+        digitizer_analog_trace_message_buffer_has_identifier,
+        root_as_digitizer_analog_trace_message, DigitizerAnalogTraceMessage,
+    },
+    dev2_digitizer_event_v2_generated::{
+        digitizer_event_list_message_buffer_has_identifier, root_as_digitizer_event_list_message,
+        DigitizerEventListMessage,
+    },
 };
 
 pub(crate) use cache::Cache;
@@ -166,8 +172,6 @@ impl CreateFromMessage<DigitizerEventListMessage<'_>> for DigitiserEventList {
         events
     }
 }
-
-
 
 pub(crate) trait FBMessage<'a>: Sized {
     type UnpackedMessage;

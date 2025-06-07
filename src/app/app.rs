@@ -9,7 +9,9 @@ use ratatui::{
 };
 
 use crate::{
-    app::{results::Results, setup::Setup}, finder::{InitSearchResponse, MessageFinder, SearchTarget}, tui::{Component, ComponentContainer, FocusableComponent, TuiComponent}
+    app::{results::Results, setup::Setup},
+    finder::{InitSearchResponse, MessageFinder, SearchTarget},
+    tui::{Component, ComponentContainer, FocusableComponent, TuiComponent},
 };
 
 use strum::{EnumIter, IntoEnumIterator};
@@ -33,7 +35,7 @@ pub(crate) struct App<M> {
     //help: TuiComponent<Controls>,
 }
 
-impl<'a, M : MessageFinder> App<M> {
+impl<'a, M: MessageFinder> App<M> {
     pub(crate) fn new(message_finder: M) -> Self {
         App {
             quit: false,
@@ -57,7 +59,7 @@ impl<'a, M : MessageFinder> App<M> {
     }
 }
 
-impl<'a,M> ComponentContainer for App<M> {
+impl<'a, M> ComponentContainer for App<M> {
     fn focused_component(&self) -> &dyn FocusableComponent {
         match self.focus {
             Focus::Setup => &self.setup,
@@ -73,23 +75,20 @@ impl<'a,M> ComponentContainer for App<M> {
     }
 }
 
-impl<'a, M : MessageFinder> Component for App<M> {
+impl<'a, M: MessageFinder> Component for App<M> {
     fn handle_key_press(&mut self, key: KeyEvent) {
         if key == KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE) {
             self.quit = true;
         } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
-            
-            self.focused_component_mut()
-                .set_focus(false);
+            self.focused_component_mut().set_focus(false);
 
-            self.focus = Focus::iter().cycle()
+            self.focus = Focus::iter()
+                .cycle()
                 .skip(self.focus.clone() as usize + 1)
                 .next()
                 .expect("");
 
-            self.focused_component_mut()
-                .set_focus(true);
-
+            self.focused_component_mut().set_focus(true);
         } else if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
             if let Some(search) = self.search.take() {
                 search.send_halt.send(()).expect("");
@@ -98,14 +97,10 @@ impl<'a, M : MessageFinder> Component for App<M> {
             match self.focus {
                 Focus::Setup => {
                     if self.search.is_none() {
-                        self.search = self.setup
-                            .underlying_mut()
-                            .search(&mut self.message_finder);
+                        self.search = self.setup.underlying_mut().search(&mut self.message_finder);
                     }
-                },
-                Focus::Results => {
-
-                },
+                }
+                Focus::Results => {}
             }
         } else {
             self.focused_component_mut().handle_key_press(key);
@@ -148,19 +143,16 @@ impl<'a, M : MessageFinder> Component for App<M> {
 
         self.help.render(frame, help);
     } */
-   fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
         let (setup, results) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(4),
-                    Constraint::Min(4),
-                ])
+                .constraints([Constraint::Length(4), Constraint::Min(4)])
                 .split(area);
             (chunk[0], chunk[1])
         };
         self.setup.render(frame, setup);
 
         self.results.render(frame, results);
-    } 
+    }
 }

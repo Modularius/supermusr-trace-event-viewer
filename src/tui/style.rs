@@ -1,11 +1,15 @@
 use std::io::Stdout;
 
 use crossterm::event::KeyEvent;
-use ratatui::{layout::Rect, prelude::CrosstermBackend, style::{Color, Style}, widgets::{Block, Borders}, Frame};
+use ratatui::{
+    layout::Rect,
+    prelude::CrosstermBackend,
+    style::{Color, Style},
+    widgets::{Block, Borders},
+    Frame,
+};
 
 use crate::tui::{BlockExt, Component};
-
-
 
 #[derive(Clone)]
 pub(crate) struct ComponentStyle {
@@ -21,17 +25,13 @@ impl ComponentStyle {
     }
 
     pub(crate) fn get_focus_border(&self) -> &Style {
-        self.focus_border
-            .as_ref()
-            .unwrap_or(&self.border)
+        self.focus_border.as_ref().unwrap_or(&self.border)
     }
 
     pub(crate) fn get_parent_focus_border(&self) -> &Style {
-        self.parent_focus_border
-            .as_ref()
-            .unwrap_or(&self.border)
+        self.parent_focus_border.as_ref().unwrap_or(&self.border)
     }
-    
+
     pub(crate) fn default() -> Self {
         Self {
             main: Style::new().fg(Color::Green).bg(Color::Black),
@@ -40,7 +40,7 @@ impl ComponentStyle {
             parent_focus_border: Some(Style::new().fg(Color::LightGreen).bg(Color::Black)),
         }
     }
-    
+
     pub(crate) fn selectable() -> Self {
         Self {
             main: Style::new().fg(Color::Green).bg(Color::Black),
@@ -49,7 +49,7 @@ impl ComponentStyle {
             parent_focus_border: Some(Style::new().fg(Color::LightGreen).bg(Color::Black)),
         }
     }
-    
+
     pub(crate) fn dark() -> Self {
         Self {
             main: Style::new().fg(Color::DarkGray).bg(Color::Black),

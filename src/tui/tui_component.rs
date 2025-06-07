@@ -1,10 +1,17 @@
 use std::{io::Stdout, rc::Rc};
 
 use crossterm::event::KeyEvent;
-use ratatui::{layout::Rect, prelude::CrosstermBackend, style::{Color, Style}, widgets::{Block, Borders}, Frame};
+use ratatui::{
+    layout::Rect,
+    prelude::CrosstermBackend,
+    style::{Color, Style},
+    widgets::{Block, Borders},
+    Frame,
+};
 
-use crate::tui::{builder::TuiComponentBuilder, style::ComponentStyle, BlockExt, Component, FocusableComponent};
-
+use crate::tui::{
+    builder::TuiComponentBuilder, style::ComponentStyle, BlockExt, Component, FocusableComponent,
+};
 
 pub(crate) struct TuiComponent<C: Component + Sized> {
     has_focus: bool,
@@ -22,7 +29,7 @@ impl<C: Component> TuiComponent<C> {
             config,
         }
     }
-    
+
     pub(crate) fn has_focus(&self) -> bool {
         self.has_focus
     }
@@ -37,7 +44,7 @@ impl<C: FocusableComponent> FocusableComponent for TuiComponent<C> {
         self.has_focus = focus;
         self.comp.set_focus(focus);
     }
-    
+
     fn propagate_parental_focus(&mut self, focus: bool) {
         self.parent_has_focus = focus;
         self.comp.propagate_parental_focus(focus);
@@ -59,15 +66,13 @@ impl<C: Component> Component for TuiComponent<C> {
                 .borders(Borders::ALL)
                 .set_title(self)
                 .set_border(self)
-                .style(
-                    if self.has_focus {
-                        *self.config.style.get_focus_border()
-                    } else if self.parent_has_focus {
-                        *self.config.style.get_parent_focus_border()
-                    } else {
-                        self.config.style.main
-                    }
-                );
+                .style(if self.has_focus {
+                    *self.config.style.get_focus_border()
+                } else if self.parent_has_focus {
+                    *self.config.style.get_parent_focus_border()
+                } else {
+                    self.config.style.main
+                });
 
             frame.render_widget(block.clone(), area);
             self.comp.render(frame, block.inner(area));
