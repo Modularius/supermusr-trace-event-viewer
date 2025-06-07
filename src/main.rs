@@ -1,8 +1,13 @@
 //!
-//!
-use cache::Cache;
+//! 
+mod messages;
+mod finder;
+mod tui;
+mod app;
+mod cli_structs;
+
+use chrono::{DateTime, Utc};
 use clap::Parser;
-use cli_structs::{CollectType, Mode, Select, Topics, UserBounds};
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event
@@ -22,22 +27,16 @@ use supermusr_common::{
     CommonKafkaOpts,
 };
 use tokio::{
-    signal::unix::{signal, SignalKind},
-    time,
+    signal::unix::{signal, SignalKind}, sync::mpsc::{self, Receiver, Sender}, time
 };
 use tracing::warn;
 
-use crate::tui::{App, Component};
+use crate::{app::App, cli_structs::{Select, Topics, UserBounds}, finder::SearchEngine, tui::Component};
 
-mod cache;
-mod cli_structs;
-mod data;
-mod graphics;
-mod output;
-//mod engine;
-mod finder;
-mod message;
-mod tui;
+type Timestamp = DateTime<Utc>;
+
+//use crate::{finder::finder_task, tui::{App, Component}};
+
 
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
@@ -71,13 +70,13 @@ struct Cli {
     #[clap(flatten)]
     select: Select,
 
-    /// Which data to collect.
-    #[clap(long)]
-    collect: CollectType,
+    ///// Which data to collect.
+    //#[clap(long)]
+    //collect: CollectType,
 
-    /// Subcommand to execute.
-    #[command(subcommand)]
-    mode: Mode,
+    ///// Subcommand to execute.
+    //#[command(subcommand)]
+    //mode: Mode,
 }
 
 pub fn create_default_consumer(
@@ -130,18 +129,17 @@ async fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(&consumer, &args.topics, &args.select);
-    app.give_focus();
+    let search = SearchEngine::new(consumer, &args.select, &args.topics);
+    let mut app = App::new(search);
 
     let mut sigint = signal(SignalKind::interrupt())?;
-
-    //let (tx, rx) = mpsc::channel();
+    //let finder_task_handle = tokio::spawn();
+  
     let mut update_interval = tokio::time::interval(time::Duration::from_millis(100));
 
     loop {
         tokio::select! {
             _ = update_interval.tick() => {
-
                 if event::poll(time::Duration::from_millis(10)).is_ok() {
                     if let Event::Key(key) =
                         event::read().expect("should be able to read an event after a successful poll")
@@ -153,9 +151,9 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 if app.changed() {
-                    app.give_focus();
-                    terminal.draw(|frame|app.render(frame, frame.size()))?;
-                    app.acknowledge_change();
+                    //app.give_focus();
+                    //terminal.draw(|frame|app.render(frame, frame.size()))?;
+                    //app.acknowledge_change();
                 }
             },
             _ = sigint.recv() => {

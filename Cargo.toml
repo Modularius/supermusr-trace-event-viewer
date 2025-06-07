@@ -20,3 +20,4 @@ supermusr-common = { path = "./../supermusr-data-pipeline/common" }
 supermusr-streaming-types = { path = "./../supermusr-data-pipeline/streaming-types" }
 tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "signal", "sync"] }
 tracing = "0.1.41"
+tui-input = { version = "*", features = ["crossterm"], default-features = false }

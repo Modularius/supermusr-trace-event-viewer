@@ -10,7 +10,7 @@ use supermusr_streaming_types::{
 };
 use tracing::{error, info};
 
-use crate::data::{CreateFromMessage, DigitiserEventList, DigitiserMetadata, DigitiserTrace};
+use crate::messages::{CreateFromMessage, DigitiserEventList, DigitiserMetadata, DigitiserTrace};
 
 #[derive(Default)]
 pub(crate) struct Cache {

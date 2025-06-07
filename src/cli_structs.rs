@@ -3,8 +3,6 @@ use supermusr_common::{Channel, Intensity, Time};
 
 use chrono::{DateTime, Utc};
 
-use crate::output::OutputToFile;
-
 #[derive(Clone, Debug, Args)]
 pub(crate) struct Topics {
     /// Kafka trace topic.
@@ -35,6 +33,7 @@ pub(crate) struct UserBounds {
     pub(crate) intensity_max: Option<Intensity>,
 }
 
+/*
 #[derive(Clone, Subcommand)]
 pub(crate) enum Mode {
     /// Outputs image to file.
@@ -42,6 +41,7 @@ pub(crate) enum Mode {
     // /// Outputs image to server.
     //Server(OutputToFile),
 }
+    */
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub(crate) enum CollectType {
