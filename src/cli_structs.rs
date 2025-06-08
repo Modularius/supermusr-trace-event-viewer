@@ -62,7 +62,7 @@ pub(crate) enum CollectType {
 #[derive(Clone, Debug, Args)]
 pub(crate) struct Select {
     /// The timestamp of the frame to search for.
-    #[clap(long)]
+    #[clap(long, default_value = "Utc::now()")]
     pub(crate) timestamp: DateTime<Utc>,
 
     #[clap(flatten)]

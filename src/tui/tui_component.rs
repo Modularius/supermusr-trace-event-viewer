@@ -4,13 +4,13 @@ use crossterm::event::KeyEvent;
 use ratatui::{
     layout::Rect,
     prelude::CrosstermBackend,
-    style::{Color, Style},
+    style::{Color, Style, Styled},
     widgets::{Block, Borders},
     Frame,
 };
 
 use crate::tui::{
-    builder::TuiComponentBuilder, style::ComponentStyle, BlockExt, Component, FocusableComponent,
+    builder::TuiComponentBuilder, style::ComponentStyle, BlockExt, Component, ComponentContainer, FocusableComponent
 };
 
 pub(crate) struct TuiComponent<C: Component + Sized> {
@@ -34,8 +34,26 @@ impl<C: Component> TuiComponent<C> {
         self.has_focus
     }
 
+    pub(crate) fn parent_has_focus(&self) -> bool {
+        self.has_focus
+    }
+
     pub(crate) fn underlying_mut(&mut self) -> &mut C {
         &mut self.comp
+    }
+
+    pub(crate) fn get_builder(&self) -> &TuiComponentBuilder {
+        &self.config
+    }
+}
+
+impl<C: ComponentContainer> ComponentContainer for TuiComponent<C> {
+    fn focused_component(&self) -> &dyn FocusableComponent {
+        self.comp.focused_component()
+    }
+
+    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
+        self.comp.focused_component_mut()
     }
 }
 
@@ -65,14 +83,7 @@ impl<C: Component> Component for TuiComponent<C> {
             let block = Block::new()
                 .borders(Borders::ALL)
                 .set_title(self)
-                .set_border(self)
-                .style(if self.has_focus {
-                    *self.config.style.get_focus_border()
-                } else if self.parent_has_focus {
-                    *self.config.style.get_parent_focus_border()
-                } else {
-                    self.config.style.main
-                });
+                .set_border(self);
 
             frame.render_widget(block.clone(), area);
             self.comp.render(frame, block.inner(area));

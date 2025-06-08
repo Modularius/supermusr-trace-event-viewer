@@ -13,15 +13,18 @@ pub(crate) use engine::SearchEngine;
 
 pub(crate) struct InitSearchResponse {
     pub(crate) send_halt: oneshot::Sender<()>,
-    pub(crate) recv_finished: oneshot::Receiver<Cache>,
+    //pub(crate) recv_finished: oneshot::Receiver<Cache>,
     pub(crate) recv_status: mpsc::Receiver<SearchStatus>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub(crate) enum SearchStatus {
     #[default]
     Off,
-    On,
+    TraceSearchInProgress(u32,u32),
+    EventListSearchInProgress(u32,u32),
+    Halted,
+    Successful(Cache),
 }
 
 #[derive(Default, Clone)]
@@ -49,4 +52,6 @@ impl SearchTarget {
 
 pub(crate) trait MessageFinder {
     fn init_search(&mut self, target: SearchTarget) -> Option<InitSearchResponse>;
+    
+    fn retrieve_consumer(&mut self);
 }

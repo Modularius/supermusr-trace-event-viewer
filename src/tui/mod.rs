@@ -1,5 +1,6 @@
 mod builder;
 mod style;
+mod textbox;
 mod tui_component;
 
 use std::io::Stdout;
@@ -15,6 +16,7 @@ use ratatui::{
 pub(crate) use builder::TuiComponentBuilder;
 pub(crate) use style::ComponentStyle;
 pub(crate) use tui_component::TuiComponent;
+pub(crate) use textbox::TextBox;
 
 pub(crate) trait Component {
     fn handle_key_press(&mut self, key: KeyEvent);
@@ -43,11 +45,11 @@ pub(crate) trait BlockExt {
 
 impl BlockExt for Block<'_> {
     fn set_title<C: Component>(self, comp: &TuiComponent<C>) -> Self {
-        /*
-        let name = if comp.has_focus {
-            comp.selected_name.or(comp.name)
+        
+        let name = if comp.has_focus() {
+            comp.get_builder().selected_name.or(comp.get_builder().name)
         } else {
-            comp.name
+            comp.get_builder().name
         };
         if let Some(name) = name {
             let title = Title::default()
@@ -57,22 +59,28 @@ impl BlockExt for Block<'_> {
         } else {
             self
         }
-        */
-        self
     }
 
     fn set_border<C: Component>(self, comp: &TuiComponent<C>) -> Self {
         if comp.has_focus() {
-            //self.border_style(comp.style.get_selected_border().clone())
-            //    .border_type(BorderType::Rounded)
+            if comp.parent_has_focus() {
+                self.border_style(comp.get_builder().style.full_focus)
+                    .border_type(BorderType::Rounded)
+            } else {
+                self.border_style(comp.get_builder().style.only_self_focus)
+                    .border_type(BorderType::Rounded)
+            }
         } else {
-            //self.border_style(comp.style.border)
+            if comp.parent_has_focus() {
+                self.border_style(comp.get_builder().style.only_parent_focus)
+            } else {
+                self.border_style(comp.get_builder().style.no_focus)
+            }
         }
-        self
     }
 }
 
-pub(crate) trait ComponentContainer {
+pub(crate) trait ComponentContainer : Component {
     fn focused_component(&self) -> &dyn FocusableComponent;
 
     fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent;

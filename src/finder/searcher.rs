@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use rdkafka::{
-    consumer::{BaseConsumer, Consumer},
-    TopicPartitionList,
+    consumer::{BaseConsumer, Consumer}, util::Timeout, TopicPartitionList
 };
 use tokio::sync::mpsc;
+use tracing::{info, instrument};
 
 use crate::{finder::SearchStatus, messages::FBMessage, Timestamp};
 
@@ -16,6 +18,7 @@ pub(crate) struct Searcher<'a, M> {
 }
 
 impl<'a, M> Searcher<'a, M> {
+    #[instrument(skip_all)]
     pub(crate) fn new(
         consumer: &'a BaseConsumer,
         topic: &str,
@@ -34,6 +37,14 @@ impl<'a, M> Searcher<'a, M> {
         }
     }
 
+    #[instrument(skip_all)]
+    pub(crate) async fn emit_status(send_status: &mpsc::Sender<SearchStatus>, new_status: SearchStatus) {
+        //let mut status = self.status.lock().expect("Status");
+        //status.replace(new_status);
+        send_status.send(new_status).await.expect("");
+    }
+
+    #[instrument(skip_all)]
     pub(crate) fn iter_backstep(self) -> BackstepIter<'a, M> {
         BackstepIter {
             inner: self,
@@ -41,6 +52,7 @@ impl<'a, M> Searcher<'a, M> {
         }
     }
 
+    #[instrument(skip_all)]
     pub(crate) fn iter_forward(self) -> ForwardSearchIter<'a, M> {
         ForwardSearchIter {
             inner: self,
@@ -54,6 +66,7 @@ impl<'a, M> Searcher<'a, M> {
 }
 
 impl<'a, M> Into<Vec<M>> for Searcher<'a, M> {
+    #[instrument(skip_all)]
     fn into(self) -> Vec<M> {
         self.results
     }
@@ -63,6 +76,7 @@ impl<'a, M> Searcher<'a, M>
 where
     M: FBMessage<'a>,
 {
+    #[instrument(skip_all)]
     fn message(&mut self, offset: i64) -> Option<M> {
         self.tpl
             .set_partition_offset(self.topic.as_str(), 0, rdkafka::Offset::OffsetTail(offset))
@@ -97,17 +111,33 @@ impl<'a, M> BackstepIter<'a, M>
 where
     M: FBMessage<'a>,
 {
+    #[instrument(skip_all)]
     pub(crate) fn backstep_until_time<F: Fn(Timestamp) -> bool>(&mut self, f: F) -> &mut Self {
         let mut offset = self.inner.offset;
-        let mut earliest = self.inner.message(offset).expect("").timestamp();
+        let mut earliest = {
+            match self.inner.message(offset) {
+                Some(message) => message.timestamp(),
+                None => return self
+            }
+        };
+        self.inner.message(offset).expect("").timestamp();
+        //info!("{offset} Earliest {earliest}");
         while f(earliest) {
             let new_offset = offset + self.step_size.expect("");
-            let new_timestamp = self.inner.message(new_offset).expect("").timestamp();
-            if f(new_timestamp) {
-                offset = new_offset;
-                earliest = new_timestamp;
-            } else {
-                break;
+            match self.inner.message(new_offset) {
+                Some(message) => { 
+                    let new_timestamp = message.timestamp();
+                    //info!("New {new_timestamp}");
+                    if f(new_timestamp) {
+                        offset = new_offset;
+                        earliest = new_timestamp;
+                    } else {
+                        break;
+                    }
+                },
+                None => {
+                    break;
+                }
             }
         }
         self.inner.set_offset(offset);
@@ -130,8 +160,9 @@ impl<'a, M> ForwardSearchIter<'a, M>
 where
     M: FBMessage<'a>,
 {
+    #[instrument(skip_all)]
     pub(crate) fn move_until<F: Fn(Timestamp) -> bool>(mut self, f: F) -> Self {
-        for msg in self.inner.consumer.iter() {
+        while let Some(msg) = self.inner.consumer.poll(Timeout::After(Duration::from_millis(100))) {
             if let Some(msg) = msg
                 .ok()
                 .and_then(FBMessage::from_borrowed_message)
@@ -143,27 +174,29 @@ where
         self
     }
 
+    #[instrument(skip_all)]
     pub(crate) fn acquire_while<F: Fn(&M) -> bool>(mut self, f: F) -> Self {
-        let first_message = self.message.take().expect("");
-        let timestamp = first_message.timestamp();
-        if f(&first_message) {
-            self.inner.results.push(first_message);
-        }
+        if let Some(first_message) = self.message.take() {
+            let timestamp = first_message.timestamp();
+            if f(&first_message) {
+                self.inner.results.push(first_message);
+            }
 
-        let messages = self
-            .inner
-            .consumer
-            .iter()
-            .flat_map(Result::ok)
-            .flat_map::<Option<M>, _>(FBMessage::from_borrowed_message);
+            let messages = self
+                .inner
+                .consumer
+                .iter()
+                .flat_map(Result::ok)
+                .flat_map::<Option<M>, _>(FBMessage::from_borrowed_message);
 
-        for msg in messages {
-            if msg.timestamp() == timestamp {
-                if f(&msg) {
-                    self.inner.results.push(msg);
+            for msg in messages {
+                if msg.timestamp() == timestamp {
+                    if f(&msg) {
+                        self.inner.results.push(msg);
+                    }
+                } else {
+                    break;
                 }
-            } else {
-                break;
             }
         }
         self

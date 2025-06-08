@@ -26,7 +26,6 @@ use supermusr_common::{
 };
 use tokio::{
     signal::unix::{signal, SignalKind},
-    sync::mpsc::{self, Receiver, Sender},
     time,
 };
 use tracing::warn;
@@ -133,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let search = SearchEngine::new(consumer, &args.select, &args.topics);
-    let mut app = App::new(search);
+    let mut app = App::new(search, &args.select);
 
     let mut sigint = signal(SignalKind::interrupt())?;
     //let finder_task_handle = tokio::spawn();
@@ -154,10 +153,9 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 if app.changed() {
-                    //app.give_focus();
-                    //terminal.draw(|frame|app.render(frame, frame.size()))?;
-                    //app.acknowledge_change();
+                    terminal.draw(|frame|app.render(frame, frame.size()))?;
                 }
+                app.run().await;
             },
             _ = sigint.recv() => {
                 break;
