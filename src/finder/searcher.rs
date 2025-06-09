@@ -182,29 +182,32 @@ where
     }
 
     #[instrument(skip_all)]
-    pub(crate) async fn acquire_while<F: Fn(&M) -> bool>(mut self, f: F) -> Self {
+    pub(crate) async fn acquire_while<F: Fn(&M) -> bool>(mut self, f: F, number: usize) -> Self {
         if let Some(first_message) = self.message.take() {
-            let timestamp = first_message.timestamp();
+            let mut timestamp = first_message.timestamp();
             if f(&first_message) {
                 self.inner.results.push(first_message);
             }
 
-            let messages = self
+            let mut messages = self
                 .inner
                 .consumer
                 .iter()
                 .flat_map(Result::ok)
                 .flat_map::<Option<M>, _>(FBMessage::from_borrowed_message);
 
-
-            for msg in messages {
-                self.inner.send_status.send(SearchStatus::Text(format!("Message timestamp: {0}", msg.timestamp()))).await.expect("");
-                if msg.timestamp() == timestamp {
-                    if f(&msg) {
-                        self.inner.results.push(msg);
+            for _ in 0..number {
+                while let Some(msg) = messages.next() {
+                    self.inner.send_status.send(SearchStatus::Text(format!("Message timestamp: {0}", msg.timestamp()))).await.expect("");
+                    let new_timestamp = msg.timestamp();
+                    if new_timestamp == timestamp {
+                        if f(&msg) {
+                            self.inner.results.push(msg);
+                        }
+                    } else {
+                        timestamp = new_timestamp;
+                        break;
                     }
-                } else {
-                    break;
                 }
             }
         }

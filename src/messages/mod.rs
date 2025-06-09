@@ -151,7 +151,7 @@ impl CreateFromMessage<DigitizerAnalogTraceMessage<'_>> for DigitiserTrace {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(crate) struct Event {
     pub(crate) time: Time,
     pub(crate) intensity: Intensity,

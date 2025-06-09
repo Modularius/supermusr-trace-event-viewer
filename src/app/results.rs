@@ -1,10 +1,11 @@
 use std::io::Stdout;
 
 use crossterm::event::KeyEvent;
-use ratatui::{layout::{Alignment, Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, widgets::Paragraph, Frame};
+use ratatui::{layout::{Alignment, Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, widgets::{Block, Borders, Paragraph}, Frame};
+use supermusr_common::Time;
 
 use crate::{
-    messages::{Cache, DigitiserMetadata, DigitiserTrace}, tui::{Channels, ComponentStyle, FocusableComponent, Graph, ListBox, TuiComponent, TuiComponentBuilder}, Component
+    messages::{Cache, DigitiserMetadata, DigitiserTrace, Event}, tui::{Channels, ComponentStyle, FocusableComponent, Graph, ListBox, TuiComponent, TuiComponentBuilder}, Component
 };
 
 pub(crate) struct Results {
@@ -19,15 +20,14 @@ impl Results {
         TuiComponentBuilder::new(ComponentStyle::selectable()).build(Self {
             cache: None,
             list: ListBox::new(&vec![], Some("Traces")),
-            graph: Graph::new(&vec![], None),
-            channels: Channels::new(None),
+            graph: Graph::new(),
+            channels: Channels::new(),
         })
     }
 
     pub(crate) fn push(&mut self, cache: Cache) {
-        self.cache = Some(cache);
-        let list = self.cache.as_ref().expect("").iter_traces().map(|(metadata,trace)|{
-            format!("[{}]\nid: {}, num channels {}, num_bins: {}",
+        let list = cache.iter_traces()
+            .map(|(metadata,trace)|{ format!("[{}]\nid: {}, num channels {}, num_bins: {}",
                 metadata.timestamp,
                 metadata.id,
                 trace.traces.len(),
@@ -37,6 +37,9 @@ impl Results {
                 )
         }).collect();
         self.list.underlying_mut().set(list);
+
+        // Take ownership of the cache
+        self.cache = Some(cache);
     }
 
     pub(crate) fn select(&mut self) -> Option<(&DigitiserMetadata, &DigitiserTrace)> {
@@ -45,16 +48,25 @@ impl Results {
             .and_then(|cache|
                 self.list
                     .underlying_mut()
-                    .select()
+                    .get_index()
                     .and_then(|i|cache.iter_traces().nth(i))
                 );
         match pair.as_ref() {
             Some((_,trace)) => {
                 if let Some(channel) = self.channels.underlying().get() {
-                    self.graph.underlying_mut().set(trace.traces[&channel].iter().enumerate().map(|(t,&x)|(t,x)).collect());
+                    self.graph.underlying_mut().set(
+                        trace.traces[&channel]
+                            .iter()
+                            .copied()
+                            .enumerate()
+                            .map(|(time,intensity)|Event {time: time as Time, intensity})
+                            .collect(),
+                        trace.events.as_ref()
+                            .map(|events|events[&channel].clone())
+                    );
                 }
             },
-            None => self.graph.underlying_mut().set(vec![]),
+            None => self.graph.underlying_mut().set(vec![], None),
         }
         pair
     }
@@ -84,7 +96,7 @@ impl Component for Results {
             if self.list.underlying_mut().pop_state_change() {
                 let channels = self.list
                     .underlying_mut()
-                    .select()
+                    .get_index()
                     .and_then(|i|cache
                         .iter_traces()
                         .nth(i)
@@ -107,7 +119,7 @@ impl Component for Results {
             let (panel, graph) = {
                 let chunk = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Length(48), Constraint::Min(64)])
+                    .constraints([Constraint::Length(50), Constraint::Min(64)])
                     .split(area);
                 (chunk[0], chunk[1])
             };
@@ -115,14 +127,20 @@ impl Component for Results {
             let (info, list, channels) = {
                 let chunk = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(4), Constraint::Min(4), Constraint::Length(4)])
+                    .constraints([Constraint::Length(3), Constraint::Min(4), Constraint::Length(3)])
                     .split(panel);
                 (chunk[0], chunk[1], chunk[2])
             };
 
             let number = Paragraph::new(format!("Number of traces/events: {}/{}", cache.iter_traces().len(),cache.iter_events().len()))
+                .block(Block::new()
+                    .border_style(Style::new().fg(Color::DarkGray).bg(Color::Black))
+                    .borders(Borders::ALL)
+                    .title_alignment(Alignment::Center)
+                )
                 .alignment(Alignment::Left)
                 .style(Style::new().fg(Color::White).bg(Color::Black));
+
             frame.render_widget(number, info);
 
             self.list.render(frame, list);

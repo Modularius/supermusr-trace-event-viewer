@@ -29,15 +29,17 @@ pub(crate) struct SearchTarget {
     pub(crate) timestamp: Timestamp,
     pub(crate) channels: Vec<Channel>,
     pub(crate) digitiser_ids: Vec<DigitizerId>,
+    pub(crate) number: usize,
 }
 
 impl SearchTarget {
     pub(crate) fn filter_trace_by_channel_and_digtiser_id(&self, msg: &TraceMessage) -> bool {
-        self.channels.iter().any(|&c| msg.has_channel(c))
-            || self
-                .digitiser_ids
-                .iter()
-                .any(|&d: &u8| msg.digitiser_id() == d)
+        //self.channels.
+        //    iter()
+        //    .any(|&c| msg.has_channel(c)) ||
+        self.digitiser_ids
+            .iter()
+            .any(|&d: &u8| msg.digitiser_id() == d)
     }
 
     pub(crate) fn filter_eventlist_digtiser_id(&self, msg: &EventListMessage) -> bool {

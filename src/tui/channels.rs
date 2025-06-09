@@ -2,11 +2,7 @@ use std::{io::Stdout, str::FromStr};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    prelude::CrosstermBackend,
-    style::{Color, Style},
-    widgets::{List, ListItem, Paragraph},
-    Frame,
+    layout::{Alignment, Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Modifier, Style}, symbols, widgets::{Block, List, ListItem, Padding, Paragraph, Tabs}, Frame
 };
 use supermusr_common::Channel;
 
@@ -21,15 +17,11 @@ pub(crate) struct Channels {
 }
 
 impl Channels {
-    pub(crate) fn new(name: Option<&'static str>) -> TuiComponent<Self> {
-        let builder = TuiComponentBuilder::new(ComponentStyle::selectable())
-            .is_in_block(true);
-
-        if let Some(name) = name {
-            builder.with_name(name)
-        } else {
-            builder
-        }.build(Self {
+    pub(crate) fn new() -> TuiComponent<Self> {
+        TuiComponentBuilder::new(ComponentStyle::selectable())
+            .is_in_block(true)
+            .with_name("Channels")
+            .build(Self {
             channels: Default::default(),
             has_focus: false,
             parent_has_focus: false,
@@ -79,22 +71,16 @@ impl Component for Channels {
         if self.channels.is_empty() {
             return;
         }
-        let areas = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(self.channels.iter().map(|_|(Constraint::Ratio(1,self.channels.len() as u32))).collect::<Vec<_>>())
-            .split(area);
+        
+        let style = Style::new().bg(Color::Rgb(0,64,0)).fg(Color::Gray);
+        let select_style = Style::new().bg(Color::Green).fg(Color::Black).add_modifier(Modifier::BOLD);
 
-        let style = Style::new().bg(Color::Black).fg(Color::Gray);
-        let select_style = Style::new().bg(Color::Green).fg(Color::Black);
+        let tabs = Tabs::new(self.channels.iter().map(|c|format!(" {c} ")).collect())
+            .style(style)
+            .highlight_style(select_style)
+            //.divider(symbols::line::THICK_VERTICAL)
+            .select(self.channel_index);
 
-        for (index, &area) in areas.iter().enumerate() {
-            let channel = Paragraph::new(format!("{}", self.channels[index]))
-                .style(if index == self.channel_index {
-                    select_style
-                } else {
-                    style
-                });
-            frame.render_widget(channel, area);
-        }        
+        frame.render_widget(tabs, area);
     }
 }

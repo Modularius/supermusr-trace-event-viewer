@@ -2,11 +2,7 @@ use std::{io::Stdout, str::FromStr};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::Rect,
-    prelude::CrosstermBackend,
-    style::{Color, Style},
-    widgets::{List, ListItem, ListState},
-    Frame,
+    layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, symbols, widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState}, Frame
 };
 
 use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
@@ -42,23 +38,21 @@ impl<D> ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std
         self.state = ListState::default()
     }
 
-    pub(crate) fn pop_state_change(&mut self) -> bool {
-        if self.has_state_changed {
-            self.has_state_changed = false;
-            true
-        } else {
-            false
-        }
-    }
-
-    pub(crate) fn select(&mut self) -> Option<usize> {
+    pub(crate) fn get_index(&self) -> Option<usize> {
         if self.data.is_empty() {
             None
         } else {
-            self.state.select(Some(self.state.offset()));
-            self.has_state_changed = true;
-            Some(self.state.offset())
+            self.state.selected()
         }
+    }
+    
+
+    pub(crate) fn pop_state_change(&mut self) -> bool {
+        let old_state_change = self.has_state_changed;
+        if self.has_state_changed {
+            self.has_state_changed = false;
+        }
+        old_state_change
     }
 }
 
@@ -79,12 +73,18 @@ impl<D> Component for ListBox<D> where D: Clone + ToString + FromStr, <D as From
         }
         if self.has_focus {
             if key.code == KeyCode::Up {
-                let new_offset = (self.data.len() + self.state.offset() - 1) % self.data.len();
-                self.state = self.state.clone().with_offset(new_offset);
+                if let Some(selection) = self.state.selected() {
+                    self.state.select(Some((self.data.len() + selection - 1) % self.data.len()));
+                } else {
+                    self.state.select(Some(0));
+                }
                 self.has_state_changed = true;
-            } else if key.code == KeyCode::Up {
-                let new_offset = (self.data.len() + self.state.offset() + 1) % self.data.len();
-                self.state = self.state.clone().with_offset(new_offset);
+            } else if key.code == KeyCode::Down {
+                if let Some(selection) = self.state.selected() {
+                    self.state.select(Some((selection + 1) % self.data.len()));
+                } else {
+                    self.state.select(Some(0));
+                }
                 self.has_state_changed = true;
             }
         }
@@ -92,26 +92,30 @@ impl<D> Component for ListBox<D> where D: Clone + ToString + FromStr, <D as From
 
     fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
         let style = Style::new().bg(Color::Black).fg(Color::Gray);
-        let focus_style = Style::new().bg(Color::Black).fg(Color::Green);
         let select_style = Style::new().bg(Color::Green).fg(Color::Black);
         
+        let (list_area, scrollbar_area) = {
+            let chunk = Layout::new()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0), Constraint::Max(2)])
+                .split(area);
+            (chunk[0], chunk[1])
+        };
+
         let list = List::new(
             self.data.iter()
                 .map(ToString::to_string)
                 .map(ListItem::new)
-                .enumerate()
-                .map(|(i,t)|{
-                    if self.state.selected().is_some_and(|si|si == i) {
-                        t.style(select_style)
-                    } else if i == self.state.offset() {
-                        t.style(focus_style)
-                    } else {
-                        t.style(style)
-                    }
-                })
                 .collect::<Vec<_>>())
-            .style(style);
-        frame.render_stateful_widget(list, area, &mut self.state.clone());
+            .style(style)
+            .highlight_symbol(symbols::bar::THREE_EIGHTHS)
+            .highlight_style(select_style);
         
+        frame.render_stateful_widget(list, list_area, &mut self.state.clone());
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        let mut scrollbar_state = ScrollbarState::default().content_length(18);
+        
+        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
     }
 }

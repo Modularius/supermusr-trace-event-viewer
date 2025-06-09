@@ -1,6 +1,6 @@
 use std::io::Stdout;
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, Frame};
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
@@ -36,8 +36,7 @@ impl Setup {
         let comp = Self {
             focus: Default::default(),
             date: TextBox::new(timestamp.date_naive(), Some("Date (YYYY-MM-DD)")),
-            time: TextBox::new(timestamp.time(), Some("Time (hh:mm:ss.nnnnnnnnn)")),
-            //timestamp: TextBox::new(timestamp, Some("Timestamp (YYYY-MM-DD hh:mm:ss.nnnnnnnnn UTC)")),
+            time: TextBox::new(timestamp.time(), Some("Time (hh:mm:ss.f)")),
             number: TextBox::new(1, Some("Number to Collect")),
             channel: TextBox::new(1, Some("Channel to Seek")),
             digitiser_id: TextBox::new(4, Some("Digitiser Id to Seek"))
@@ -56,13 +55,14 @@ impl Setup {
             let time = self.time.underlying().get();
             Timestamp::from_naive_utc_and_offset(NaiveDateTime::new(date.clone(), time.clone()), Utc)
         };
-        //let number = self.number.underlying().get();
-        let channel = self.channel.underlying().get();
-        let digitiser_id = self.digitiser_id.underlying().get();
+        let number = *self.number.underlying().get();
+        let channel = *self.channel.underlying().get();
+        let digitiser_id = *self.digitiser_id.underlying().get();
         message_finder.init_search(SearchTarget {
             timestamp,
-            channels: vec![*channel],
-            digitiser_ids: vec![*digitiser_id],
+            number,
+            channels: vec![channel],
+            digitiser_ids: vec![digitiser_id],
         })
     }
 }
@@ -95,7 +95,6 @@ impl FocusableComponent for Setup {
     }
 
     fn propagate_parental_focus(&mut self, focus: bool) {
-        //self.timestamp.propagate_parental_focus(focus);
         self.date.propagate_parental_focus(focus);
         self.date.propagate_parental_focus(focus);
         self.number.propagate_parental_focus(focus);

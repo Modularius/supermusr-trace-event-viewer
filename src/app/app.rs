@@ -116,7 +116,7 @@ impl<'a, M: MessageFinder> ComponentContainer for App<M> {
 
 impl<'a, M: MessageFinder> Component for App<M> {
     fn handle_key_press(&mut self, key: KeyEvent) {
-        if key == KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE) {
+        if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
             self.quit = true;
         } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
             self.focused_component_mut().set_focus(false);
@@ -128,10 +128,6 @@ impl<'a, M: MessageFinder> Component for App<M> {
                 .expect("");
 
             self.focused_component_mut().set_focus(true);
-        } else if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
-            /*if let Some(send_halt) = self.search.send_halt.take() {
-                send_halt.send(()).expect("Send halt should not fail.");
-            }*/
         } else if key == KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE) {
             match self.focus {
                 Focus::Setup => {

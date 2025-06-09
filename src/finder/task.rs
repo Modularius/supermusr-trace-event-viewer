@@ -65,7 +65,7 @@ impl<'a> SearchTask<'a> {
             .collect()
             .iter_forward()
             .move_until(|t| t >= target.timestamp).await
-            .acquire_while(|msg| target.filter_trace_by_channel_and_digtiser_id(msg)).await
+            .acquire_while(|msg| target.filter_trace_by_channel_and_digtiser_id(msg), target.number).await
             .collect()
             .into();
 
@@ -78,7 +78,7 @@ impl<'a> SearchTask<'a> {
         // Find Digitiser Event Lists
         self.emit_status(SearchStatus::EventListSearchInProgress(0,steps.num_step_passes + 1)).await;
 
-        let searcher = Searcher::new(&self.consumer, &self.topics.trace_topic, 1, send_status.clone());
+        let searcher = Searcher::new(&self.consumer, &self.topics.digitiser_event_topic, 1, send_status.clone());
         let mut iter = searcher.iter_backstep();
         for step in (0..steps.num_step_passes).rev() {
             self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
@@ -93,7 +93,7 @@ impl<'a> SearchTask<'a> {
             .collect()
             .iter_forward()
             .move_until(|t| t >= target.timestamp).await
-            .acquire_while(|msg| target.filter_eventlist_digtiser_id(msg)).await
+            .acquire_while(|msg| target.filter_eventlist_digtiser_id(msg), target.number).await
             .collect()
             .into();
 
