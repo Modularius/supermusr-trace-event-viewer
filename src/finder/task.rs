@@ -29,10 +29,10 @@ impl<'a> SearchTask<'a> {
     }
 
     #[instrument(skip_all)]
-    pub(crate) async fn emit_status(send_status: &mpsc::Sender<SearchStatus>, new_status: SearchStatus) {
+    pub(crate) async fn emit_status(&self, new_status: SearchStatus) {
         //let mut status = self.status.lock().expect("Status");
         //status.replace(new_status);
-        if let Err(e) = send_status.send(new_status).await {
+        if let Err(e) = self.send_status.send(new_status).await {
             panic!("{e}");
         }
     }
@@ -48,63 +48,63 @@ impl<'a> SearchTask<'a> {
         let send_status = self.send_status;
 
         // Find Digitiser Traces
-        Self::emit_status(&send_status, SearchStatus::TraceSearchInProgress(0,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::TraceSearchInProgress(0,steps.num_step_passes + 1)).await;
 
         let searcher = Searcher::new(&self.consumer, &self.topics.trace_topic, 1, send_status.clone());
         let mut iter = searcher.iter_backstep();
         for step in (0..steps.num_step_passes).rev() {
-            Self::emit_status(&send_status, SearchStatus::TraceSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
+            self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
             let sz = steps.min_step_size * steps.step_mul_coef.pow(step);
             iter.step_size(sz)
-                .backstep_until_time(|t| t > target.timestamp);
+                .backstep_until_time(|t| t > target.timestamp).await;
         }
 
-        Self::emit_status(&send_status, SearchStatus::TraceSearchInProgress(steps.num_step_passes,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes,steps.num_step_passes + 1)).await;
 
         let results: Vec<TraceMessage> = iter
             .collect()
             .iter_forward()
-            .move_until(|t| t >= target.timestamp)
-            .acquire_while(|msg| target.filter_trace_by_channel_and_digtiser_id(msg))
+            .move_until(|t| t >= target.timestamp).await
+            .acquire_while(|msg| target.filter_trace_by_channel_and_digtiser_id(msg)).await
             .collect()
             .into();
 
-        Self::emit_status(&send_status, SearchStatus::TraceSearchInProgress(steps.num_step_passes + 1,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes + 1,steps.num_step_passes + 1)).await;
 
         for trace in results.iter() {
             cache.push_trace(&trace.get_unpacked_message().expect(""));
         }
 
         // Find Digitiser Event Lists
-        Self::emit_status(&send_status, SearchStatus::EventListSearchInProgress(0,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::EventListSearchInProgress(0,steps.num_step_passes + 1)).await;
 
         let searcher = Searcher::new(&self.consumer, &self.topics.trace_topic, 1, send_status.clone());
         let mut iter = searcher.iter_backstep();
         for step in (0..steps.num_step_passes).rev() {
-            Self::emit_status(&send_status, SearchStatus::EventListSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
+            self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
             let sz = steps.min_step_size * steps.step_mul_coef.pow(step);
             iter.step_size(sz)
-                .backstep_until_time(|t| t > target.timestamp);
+                .backstep_until_time(|t| t > target.timestamp).await;
         }
 
-        Self::emit_status(&send_status, SearchStatus::EventListSearchInProgress(steps.num_step_passes,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes,steps.num_step_passes + 1)).await;
 
         let results: Vec<EventListMessage> = iter
             .collect()
             .iter_forward()
-            .move_until(|t| t >= target.timestamp)
-            .acquire_while(|msg| target.filter_eventlist_digtiser_id(msg))
+            .move_until(|t| t >= target.timestamp).await
+            .acquire_while(|msg| target.filter_eventlist_digtiser_id(msg)).await
             .collect()
             .into();
 
-        Self::emit_status(&send_status, SearchStatus::EventListSearchInProgress(steps.num_step_passes + 1,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes + 1,steps.num_step_passes + 1)).await;
 
         for eventlist in results.iter() {
             cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
         }
 
         // Send cache via status
-        Self::emit_status(&send_status, SearchStatus::Successful).await;
+        self.emit_status(SearchStatus::Successful).await;
 
         (self.consumer, cache)
     }

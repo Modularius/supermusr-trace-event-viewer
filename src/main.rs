@@ -18,7 +18,7 @@ use rdkafka::{
     consumer::{BaseConsumer, Consumer},
     error::KafkaError,
 };
-use std::net::SocketAddr;
+use std::{fs::File, net::SocketAddr};
 use supermusr_common::{
     init_tracer,
     tracer::{TracerEngine, TracerOptions},
@@ -28,6 +28,7 @@ use tokio::{
     signal::unix::{signal, SignalKind},
     time,
 };
+use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt};
 use tracing::warn;
 
 use crate::{
@@ -111,10 +112,24 @@ pub fn create_default_consumer(
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let _tracer = init_tracer!(TracerOptions::new(
+    /*let _tracer = init_tracer!(TracerOptions::new(
         args.otel_endpoint.as_deref(),
         args.otel_namespace.clone()
-    ));
+    ));*/
+
+    let file = File::create("tracing.log").expect("");
+    let stdout_tracer = tracing_subscriber::fmt::layer().with_writer(file).with_ansi(false);
+
+    // This filter is applied to the stdout tracer
+    let log_filter = EnvFilter::from_default_env();
+
+    let subscriber = tracing_subscriber::Registry::default()
+        .with(stdout_tracer.with_filter(log_filter));
+
+    //  This is only called once, so will never panic
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("tracing::subscriber::set_global_default should only be called once");
+
 
     let consumer = create_default_consumer(
         &args.common_kafka_options.broker,

@@ -1798,6 +1798,7 @@ dependencies = [
  "supermusr-streaming-types",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "tui-input",
 ]
 

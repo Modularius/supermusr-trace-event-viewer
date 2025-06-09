@@ -7,6 +7,7 @@ use ratatui::{
     Frame,
 };
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
+use tracing::info;
 
 use crate::{
     app::{results::Results, setup::Setup}, finder::{MessageFinder, SearchStatus}, tui::{Component, ComponentContainer, FocusableComponent, TextBox, TuiComponent}, Select
@@ -33,7 +34,9 @@ enum StatusMessage {
     #[strum(to_string = "Search Halted. Press <Enter> to search again.")]
     SearchHalted,
     #[strum(to_string = "Search Complete. Press <Enter> to search again.")]
-    SearchFinished
+    SearchFinished,
+    #[strum(to_string = "{0}")]
+    Text(String)
 }
 
 pub(crate) struct App<M> {
@@ -83,7 +86,9 @@ impl<'a, M: MessageFinder> App<M> {
                 SearchStatus::EventListSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::EventListSearchInProgress(prog, total)),
                 SearchStatus::Halted => self.status.underlying_mut().set(StatusMessage::SearchHalted),
                 SearchStatus::Successful => self.status.underlying_mut().set(StatusMessage::SearchFinished),
+                SearchStatus::Text(text) => self.status.underlying_mut().set(StatusMessage::Text(text)),
             }
+            info!("{0}",self.status.underlying().get());
             self.is_changed = true;
         }
         if let Some(cache) = self.message_finder.cache() {
@@ -133,7 +138,11 @@ impl<'a, M: MessageFinder> Component for App<M> {
                     self.setup.underlying_mut()
                         .search(&mut self.message_finder);
                 }
-                Focus::Results => {}
+                Focus::Results => {
+                    if let Some((metadata, trace)) = self.results.underlying_mut().select() {
+                        
+                    }
+                }
             }
         } else {
             self.focused_component_mut().handle_key_press(key);
@@ -145,7 +154,7 @@ impl<'a, M: MessageFinder> Component for App<M> {
         let (setup, status, results, help) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(6), Constraint::Length(4), Constraint::Min(8), Constraint::Length(4)])
+                .constraints([Constraint::Length(6), Constraint::Length(3), Constraint::Min(8), Constraint::Length(3)])
                 .split(area);
             (chunk[0], chunk[1], chunk[2], chunk[3])
         };

@@ -26,7 +26,6 @@ pub(crate) struct Setup {
     focus: Focus,
     date: TuiComponent<TextBox<NaiveDate>>,
     time: TuiComponent<TextBox<NaiveTime>>,
-    //timestamp: TuiComponent<TextBox<Timestamp>>,
     number: TuiComponent<TextBox<usize>>,
     channel: TuiComponent<TextBox<Channel>>,
     digitiser_id: TuiComponent<TextBox<DigitizerId>>,
@@ -41,7 +40,7 @@ impl Setup {
             //timestamp: TextBox::new(timestamp, Some("Timestamp (YYYY-MM-DD hh:mm:ss.nnnnnnnnn UTC)")),
             number: TextBox::new(1, Some("Number to Collect")),
             channel: TextBox::new(1, Some("Channel to Seek")),
-            digitiser_id: TextBox::new(1, Some("Digitiser Id to Seek"))
+            digitiser_id: TextBox::new(4, Some("Digitiser Id to Seek"))
         };
         let mut setup = TuiComponentBuilder::new(ComponentStyle::default()).build(comp);
         setup.focused_component_mut().set_focus(true);
@@ -52,12 +51,18 @@ impl Setup {
         &self,
         message_finder: &mut M,
     ) -> bool {
-        let date = self.date.underlying().get();
-        let time = self.time.underlying().get();
+        let timestamp = {
+            let date = self.date.underlying().get();
+            let time = self.time.underlying().get();
+            Timestamp::from_naive_utc_and_offset(NaiveDateTime::new(date.clone(), time.clone()), Utc)
+        };
+        //let number = self.number.underlying().get();
+        let channel = self.channel.underlying().get();
+        let digitiser_id = self.digitiser_id.underlying().get();
         message_finder.init_search(SearchTarget {
-            timestamp: Timestamp::from_naive_utc_and_offset(NaiveDateTime::new(date.clone(), time.clone()), Utc),
-            channels: vec![],
-            digitiser_ids: vec![],
+            timestamp,
+            channels: vec![*channel],
+            digitiser_ids: vec![*digitiser_id],
         })
     }
 }

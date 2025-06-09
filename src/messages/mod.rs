@@ -119,7 +119,7 @@ pub(crate) trait CreateFromMessage<M> {
 pub(crate) type Trace = Vec<Intensity>;
 
 /// Bundles all metadata which uniquely defines each digitiser message.
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct DigitiserMetadata {
     /// Unique to each digitiser.
     pub(crate) id: DigitizerId,
@@ -128,6 +128,7 @@ pub(crate) struct DigitiserMetadata {
 }
 
 /// Encapsulates all traces of a digitiser trace message.
+#[derive(Clone)]
 pub(crate) struct DigitiserTrace {
     ///
     pub(crate) traces: HashMap<Channel, Trace>,
@@ -150,6 +151,7 @@ impl CreateFromMessage<DigitizerAnalogTraceMessage<'_>> for DigitiserTrace {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) time: Time,
     pub(crate) intensity: Intensity,

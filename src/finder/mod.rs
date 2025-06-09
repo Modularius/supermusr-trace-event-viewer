@@ -2,6 +2,7 @@ mod engine;
 mod searcher;
 mod task;
 
+use strum::Display;
 use supermusr_common::{Channel, DigitizerId};
 use tokio::sync::{mpsc, oneshot};
 
@@ -16,6 +17,7 @@ pub(crate) use engine::SearchEngine;
 pub(crate) enum SearchStatus {
     #[default]
     Off,
+    Text(String),
     TraceSearchInProgress(u32,u32),
     EventListSearchInProgress(u32,u32),
     Halted,
