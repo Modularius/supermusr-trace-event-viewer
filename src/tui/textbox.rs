@@ -44,6 +44,9 @@ impl<D> TextBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::D
         self.data = data;
         self.input = Input::new(self.data.to_string());
     }
+    pub(crate) fn get(&self) -> &D {
+        &self.data
+    }
 }
 
 impl<D> FocusableComponent for TextBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {

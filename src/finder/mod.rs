@@ -1,21 +1,16 @@
 mod engine;
 mod searcher;
+mod task;
 
 use supermusr_common::{Channel, DigitizerId};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    messages::{Cache, DigitiserTrace, EventListMessage, FBMessage, TraceMessage},
+    messages::{Cache, EventListMessage, FBMessage, TraceMessage},
     Timestamp,
 };
 
 pub(crate) use engine::SearchEngine;
-
-pub(crate) struct InitSearchResponse {
-    pub(crate) send_halt: oneshot::Sender<()>,
-    //pub(crate) recv_finished: oneshot::Receiver<Cache>,
-    pub(crate) recv_status: mpsc::Receiver<SearchStatus>,
-}
 
 #[derive(Default)]
 pub(crate) enum SearchStatus {
@@ -24,7 +19,7 @@ pub(crate) enum SearchStatus {
     TraceSearchInProgress(u32,u32),
     EventListSearchInProgress(u32,u32),
     Halted,
-    Successful(Cache),
+    Successful,
 }
 
 #[derive(Default, Clone)]
@@ -51,7 +46,11 @@ impl SearchTarget {
 }
 
 pub(crate) trait MessageFinder {
-    fn init_search(&mut self, target: SearchTarget) -> Option<InitSearchResponse>;
+    fn init_search(&mut self, target: SearchTarget) -> bool;
     
-    fn retrieve_consumer(&mut self);
+    fn status(&mut self) -> Option<SearchStatus>;
+    
+    fn cache(&mut self) -> Option<Cache>;
+
+    async fn run(&mut self);
 }

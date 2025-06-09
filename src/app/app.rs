@@ -7,7 +7,6 @@ use ratatui::{
     Frame,
 };
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
-use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     app::{results::Results, setup::Setup}, finder::{MessageFinder, SearchStatus}, tui::{Component, ComponentContainer, FocusableComponent, TextBox, TuiComponent}, Select
@@ -37,17 +36,10 @@ enum StatusMessage {
     SearchFinished
 }
 
-#[derive(Default)]
-struct SearchTools {
-    send_halt: Option<oneshot::Sender<()>>,
-    recv_status: Option<mpsc::Receiver<SearchStatus>>,
-}
-
 pub(crate) struct App<M> {
     quit: bool,
     is_changed: bool,
     message_finder: M,
-    search: SearchTools,
     focus: Focus,
     setup: TuiComponent<Setup>,
     status: TuiComponent<TextBox<StatusMessage>>,
@@ -62,7 +54,6 @@ impl<'a, M: MessageFinder> App<M> {
             is_changed: true,
             message_finder,
             focus: Default::default(),
-            search: Default::default(),
             setup: Setup::new(select.timestamp),
             status: TextBox::new(Default::default(), Some("Status")),
             results: Results::new(),
@@ -80,26 +71,25 @@ impl<'a, M: MessageFinder> App<M> {
         self.quit
     }
 
-    pub(crate) async fn run(&mut self) {
-        if let Some(recv_status) = self.search.recv_status.as_mut() {
-            if let Some(status) = recv_status.recv().await {
-                match status {
-                    SearchStatus::Off => self.status.underlying_mut().set(StatusMessage::SearchFinished),
-                    SearchStatus::TraceSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::TraceSearchInProgress(prog, total)),
-                    SearchStatus::EventListSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::EventListSearchInProgress(prog, total)),
-                    SearchStatus::Halted => {
-                        self.status.underlying_mut().set(StatusMessage::SearchHalted);
-                        self.search = Default::default();
-                    },
-                    SearchStatus::Successful(cache) => {
-                        self.status.underlying_mut().set(StatusMessage::SearchFinished);
-                        self.search = Default::default();
-                        self.results.underlying_mut().push(cache);
-                    },
-                };
+    pub(crate) async fn async_run(&mut self) {
+        self.message_finder.run().await;
+    }
+
+    pub(crate) fn run(&mut self) {
+        if let Some(status) = self.message_finder.status() {
+            match status {
+                SearchStatus::Off => self.status.underlying_mut().set(StatusMessage::SearchFinished),
+                SearchStatus::TraceSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::TraceSearchInProgress(prog, total)),
+                SearchStatus::EventListSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::EventListSearchInProgress(prog, total)),
+                SearchStatus::Halted => self.status.underlying_mut().set(StatusMessage::SearchHalted),
+                SearchStatus::Successful => self.status.underlying_mut().set(StatusMessage::SearchFinished),
             }
+            self.is_changed = true;
         }
-        self.message_finder.retrieve_consumer();
+        if let Some(cache) = self.message_finder.cache() {
+            self.results.underlying_mut().push(cache);
+            self.is_changed = true;
+        }
     }
 }
 
@@ -134,22 +124,14 @@ impl<'a, M: MessageFinder> Component for App<M> {
 
             self.focused_component_mut().set_focus(true);
         } else if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
-            if let Some(send_halt) = self.search.send_halt.take() {
+            /*if let Some(send_halt) = self.search.send_halt.take() {
                 send_halt.send(()).expect("Send halt should not fail.");
-            }
+            }*/
         } else if key == KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE) {
             match self.focus {
                 Focus::Setup => {
-                    if self.search.recv_status.is_none() {
-                        let resp = self.setup
-                            .underlying_mut()
-                            .search(&mut self.message_finder)
-                            .expect("");
-                        self.search.recv_status = Some(resp.recv_status);
-                        self.search.send_halt = Some(resp.send_halt);
-
-                        self.status.underlying_mut().set(StatusMessage::SearchBegun);
-                    }
+                    self.setup.underlying_mut()
+                        .search(&mut self.message_finder);
                 }
                 Focus::Results => {}
             }

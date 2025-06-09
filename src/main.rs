@@ -127,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
     // Set up terminal.
     terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -135,27 +135,35 @@ async fn main() -> anyhow::Result<()> {
     let mut app = App::new(search, &args.select);
 
     let mut sigint = signal(SignalKind::interrupt())?;
-    //let finder_task_handle = tokio::spawn();
 
-    let mut update_interval = tokio::time::interval(time::Duration::from_millis(100));
+    let mut app_update = tokio::time::interval(time::Duration::from_millis(100));
+
+    let mut engine_update = tokio::time::interval(time::Duration::from_millis(100));
+    
+    terminal.draw(|frame|app.render(frame, frame.size()))?;
 
     loop {
         tokio::select! {
-            _ = update_interval.tick() => {
-                if event::poll(time::Duration::from_millis(10)).is_ok() {
-                    if let Event::Key(key) =
-                        event::read().expect("should be able to read an event after a successful poll")
-                    {
-                        app.handle_key_press(key);
-                        if app.is_quit() {
-                            break;
-                        }
-                    }
+            _ = app_update.tick() => {
+                match event::poll(time::Duration::from_millis(10)) {
+                    Ok(true) => match event::read() {
+                        Ok(Event::Key(key)) => app.handle_key_press(key),
+                        Err(e) => panic!("{e}"),
+                        _ => {}
+                    },
+                    Err(e) => panic!("{e}"),
+                    _ => {}
                 }
                 if app.changed() {
                     terminal.draw(|frame|app.render(frame, frame.size()))?;
                 }
-                app.run().await;
+                if app.is_quit() {
+                    break;
+                }
+                app.run();
+            },
+            _ = engine_update.tick() => {
+                app.async_run().await
             },
             _ = sigint.recv() => {
                 break;
@@ -166,8 +174,7 @@ async fn main() -> anyhow::Result<()> {
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
+        LeaveAlternateScreen
     )?;
     terminal.show_cursor()?;
     terminal.clear()?;

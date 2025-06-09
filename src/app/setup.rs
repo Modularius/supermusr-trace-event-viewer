@@ -1,21 +1,22 @@
 use std::io::Stdout;
 
-use chrono::Utc;
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, Frame};
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 use supermusr_common::{Channel, DigitizerId};
 
 use crate::{
-    finder::{InitSearchResponse, MessageFinder, SearchTarget},
+    finder::{MessageFinder, SearchTarget},
     tui::{ComponentContainer, ComponentStyle, FocusableComponent, TextBox, TuiComponent, TuiComponentBuilder},
     Component, Timestamp,
 };
 
 #[derive(Default, Clone, EnumCount, EnumIter)]
 enum Focus {
+    Date,
     #[default]
-    Timestamp,
+    Time,
     Number,
     Channel,
     DigitiserId
@@ -23,7 +24,9 @@ enum Focus {
 
 pub(crate) struct Setup {
     focus: Focus,
-    timestamp: TuiComponent<TextBox<Timestamp>>,
+    date: TuiComponent<TextBox<NaiveDate>>,
+    time: TuiComponent<TextBox<NaiveTime>>,
+    //timestamp: TuiComponent<TextBox<Timestamp>>,
     number: TuiComponent<TextBox<usize>>,
     channel: TuiComponent<TextBox<Channel>>,
     digitiser_id: TuiComponent<TextBox<DigitizerId>>,
@@ -33,7 +36,9 @@ impl Setup {
     pub(crate) fn new(timestamp: Timestamp) -> TuiComponent<Self> {
         let comp = Self {
             focus: Default::default(),
-            timestamp: TextBox::new(timestamp, Some("Timestamp (YYYY-MM-DD hh:mm:ss.nnnnnnnnn UTC)")),
+            date: TextBox::new(timestamp.date_naive(), Some("Date (YYYY-MM-DD)")),
+            time: TextBox::new(timestamp.time(), Some("Time (hh:mm:ss.nnnnnnnnn)")),
+            //timestamp: TextBox::new(timestamp, Some("Timestamp (YYYY-MM-DD hh:mm:ss.nnnnnnnnn UTC)")),
             number: TextBox::new(1, Some("Number to Collect")),
             channel: TextBox::new(1, Some("Channel to Seek")),
             digitiser_id: TextBox::new(1, Some("Digitiser Id to Seek"))
@@ -46,9 +51,11 @@ impl Setup {
     pub(crate) fn search<M: MessageFinder>(
         &self,
         message_finder: &mut M,
-    ) -> Option<InitSearchResponse> {
+    ) -> bool {
+        let date = self.date.underlying().get();
+        let time = self.time.underlying().get();
         message_finder.init_search(SearchTarget {
-            timestamp: Utc::now(),
+            timestamp: Timestamp::from_naive_utc_and_offset(NaiveDateTime::new(date.clone(), time.clone()), Utc),
             channels: vec![],
             digitiser_ids: vec![],
         })
@@ -58,7 +65,8 @@ impl Setup {
 impl ComponentContainer for Setup {
     fn focused_component(&self) -> &dyn FocusableComponent {
         match self.focus {
-            Focus::Timestamp => &self.timestamp,
+            Focus::Date => &self.date,
+            Focus::Time => &self.time,
             Focus::Number => &self.number,
             Focus::Channel => &self.channel,
             Focus::DigitiserId => &self.digitiser_id,
@@ -67,7 +75,8 @@ impl ComponentContainer for Setup {
 
     fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
         match self.focus {
-            Focus::Timestamp => &mut self.timestamp,
+            Focus::Date => &mut self.date,
+            Focus::Time => &mut self.time,
             Focus::Number => &mut self.number,
             Focus::Channel => &mut self.channel,
             Focus::DigitiserId => &mut self.digitiser_id,
@@ -81,7 +90,9 @@ impl FocusableComponent for Setup {
     }
 
     fn propagate_parental_focus(&mut self, focus: bool) {
-        self.timestamp.propagate_parental_focus(focus);
+        //self.timestamp.propagate_parental_focus(focus);
+        self.date.propagate_parental_focus(focus);
+        self.date.propagate_parental_focus(focus);
         self.number.propagate_parental_focus(focus);
         self.channel.propagate_parental_focus(focus);
         self.digitiser_id.propagate_parental_focus(focus);
@@ -112,7 +123,7 @@ impl Component for Setup {
     }
 
     fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        let (timestamp, number, channel, digitiser_id) = {
+        let (datetime, number, channel, digitiser_id) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Min(48), Constraint::Max(24), Constraint::Max(24), Constraint::Max(24)])
@@ -120,7 +131,17 @@ impl Component for Setup {
             (chunk[0], chunk[1], chunk[2], chunk[3])
         };
 
-        self.timestamp.render(frame, timestamp);
+        let (date, time) = {
+            let chunk = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(datetime);
+            (chunk[0], chunk[1])
+        };
+
+        self.date.render(frame, date);
+        self.time.render(frame, time);
+        //self.timestamp.render(frame, timestamp);
         self.number.render(frame, number);
         self.channel.render(frame, channel);
         self.digitiser_id.render(frame, digitiser_id);

@@ -38,6 +38,10 @@ impl<C: Component> TuiComponent<C> {
         self.has_focus
     }
 
+    pub(crate) fn underlying(&self) -> &C {
+        &self.comp
+    }
+
     pub(crate) fn underlying_mut(&mut self) -> &mut C {
         &mut self.comp
     }
