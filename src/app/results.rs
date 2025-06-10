@@ -5,23 +5,25 @@ use ratatui::{layout::{Alignment, Constraint, Direction, Layout, Rect}, prelude:
 use supermusr_common::Time;
 
 use crate::{
-    messages::{Cache, DigitiserMetadata, DigitiserTrace, Event}, tui::{Channels, ComponentStyle, FocusableComponent, Graph, ListBox, TuiComponent, TuiComponentBuilder}, Component
+    finder::SearchStatus, messages::{Cache, DigitiserMetadata, DigitiserTrace, Event}, tui::{Channels, ComponentStyle, FocusableComponent, Graph, ListBox, Statusbar, TuiComponent, TuiComponentBuilder}, Component, Select
 };
 
 pub(crate) struct Results {
     cache: Option<Cache>,
     list: TuiComponent<ListBox<String>>,
     channels: TuiComponent<Channels>,
-    graph: TuiComponent<Graph>
+    graph: TuiComponent<Graph>,
+    status: TuiComponent<Statusbar>,
 }
 
 impl Results {
-    pub(crate) fn new() -> TuiComponent<Self> {
+    pub(crate) fn new(select: &Select) -> TuiComponent<Self> {
         TuiComponentBuilder::new(ComponentStyle::selectable()).build(Self {
             cache: None,
             list: ListBox::new(&vec![], Some("Traces")),
             graph: Graph::new(),
             channels: Channels::new(),
+            status: Statusbar::new(select),
         })
     }
 
@@ -37,6 +39,8 @@ impl Results {
                 )
         }).collect();
         self.list.underlying_mut().set(list);
+
+        self.status.underlying_mut().set_info(&cache);
 
         // Take ownership of the cache
         self.cache = Some(cache);
@@ -69,6 +73,10 @@ impl Results {
             None => self.graph.underlying_mut().set(vec![], None),
         }
         pair
+    }
+
+    pub(crate) fn set_status(&mut self, status: SearchStatus) {
+        self.status.underlying_mut().set_status(status)
     }
 }
 
@@ -114,39 +122,38 @@ impl Component for Results {
         todo!()
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        if let Some(cache) = self.cache.as_ref() {
+    fn render(&self, frame: &mut Frame, area: Rect) {
+        let (status, results) = {
+            let chunk = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(4), Constraint::Min(16)])
+                .split(area);
+            (chunk[0], chunk[1])
+        };
+
+        self.status.render(frame, status);
+
+        //if let Some(cache) = self.cache.as_ref() {
             let (panel, graph) = {
                 let chunk = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Length(50), Constraint::Min(64)])
-                    .split(area);
+                    .split(results);
                 (chunk[0], chunk[1])
             };
 
-            let (info, list, channels) = {
+            let (list, channels) = {
                 let chunk = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(3), Constraint::Min(4), Constraint::Length(3)])
+                    .constraints([Constraint::Min(4), Constraint::Length(3)])
                     .split(panel);
-                (chunk[0], chunk[1], chunk[2])
+                (chunk[0], chunk[1])
             };
-
-            let number = Paragraph::new(format!("Number of traces/events: {}/{}", cache.iter_traces().len(),cache.iter_events().len()))
-                .block(Block::new()
-                    .border_style(Style::new().fg(Color::DarkGray).bg(Color::Black))
-                    .borders(Borders::ALL)
-                    .title_alignment(Alignment::Center)
-                )
-                .alignment(Alignment::Left)
-                .style(Style::new().fg(Color::White).bg(Color::Black));
-
-            frame.render_widget(number, info);
 
             self.list.render(frame, list);
             self.channels.render(frame, channels);
             
             self.graph.render(frame, graph);
-        }
+        //}
     }
 }

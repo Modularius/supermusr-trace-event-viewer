@@ -6,7 +6,7 @@ use ratatui::{
     prelude::CrosstermBackend,
     Frame,
 };
-use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
+use strum::{EnumIter, IntoEnumIterator};
 use tracing::info;
 
 use crate::{
@@ -20,32 +20,12 @@ enum Focus {
     Results,
 }
 
-#[derive(Default, EnumString, Display)]
-enum StatusMessage {
-    #[default]
-    #[strum(to_string = "Ready to Search. Press <Enter> to begin.")]
-    Waiting,
-    #[strum(to_string = "Searching Begun. Press <Esc> to halt.")]
-    SearchBegun,
-    #[strum(to_string = "Searching for Traces: {0}/{1}. Press <Esc> to halt.")]
-    TraceSearchInProgress(u32,u32),
-    #[strum(to_string = "Searching for Event Lists: {0}/{1}. Press <Esc> to halt.")]
-    EventListSearchInProgress(u32,u32),
-    #[strum(to_string = "Search Halted. Press <Enter> to search again.")]
-    SearchHalted,
-    #[strum(to_string = "Search Complete. Press <Enter> to search again.")]
-    SearchFinished,
-    #[strum(to_string = "{0}")]
-    Text(String)
-}
-
 pub(crate) struct App<M> {
     quit: bool,
     is_changed: bool,
     message_finder: M,
     focus: Focus,
     setup: TuiComponent<Setup>,
-    status: TuiComponent<TextBox<StatusMessage>>,
     results: TuiComponent<Results>,
     help: TuiComponent<TextBox<String>>,
 }
@@ -58,8 +38,7 @@ impl<'a, M: MessageFinder> App<M> {
             message_finder,
             focus: Default::default(),
             setup: Setup::new(select.timestamp),
-            status: TextBox::new(Default::default(), Some("Status")),
-            results: Results::new(),
+            results: Results::new(select),
             help: TextBox::new(Default::default(), None),
         };
         app.focused_component_mut().set_focus(true);
@@ -80,15 +59,7 @@ impl<'a, M: MessageFinder> App<M> {
 
     pub(crate) fn run(&mut self) {
         if let Some(status) = self.message_finder.status() {
-            match status {
-                SearchStatus::Off => self.status.underlying_mut().set(StatusMessage::SearchFinished),
-                SearchStatus::TraceSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::TraceSearchInProgress(prog, total)),
-                SearchStatus::EventListSearchInProgress(prog, total) => self.status.underlying_mut().set(StatusMessage::EventListSearchInProgress(prog, total)),
-                SearchStatus::Halted => self.status.underlying_mut().set(StatusMessage::SearchHalted),
-                SearchStatus::Successful => self.status.underlying_mut().set(StatusMessage::SearchFinished),
-                SearchStatus::Text(text) => self.status.underlying_mut().set(StatusMessage::Text(text)),
-            }
-            info!("{0}",self.status.underlying().get());
+            self.results.underlying_mut().set_status(status);
             self.is_changed = true;
         }
         if let Some(cache) = self.message_finder.cache() {
@@ -146,16 +117,15 @@ impl<'a, M: MessageFinder> Component for App<M> {
         self.is_changed = true;
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        let (setup, status, results, help) = {
+    fn render(&self, frame: &mut Frame, area: Rect) {
+        let (setup, results, help) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(6), Constraint::Length(3), Constraint::Min(8), Constraint::Length(3)])
+                .constraints([Constraint::Length(6), Constraint::Min(8), Constraint::Length(3)])
                 .split(area);
-            (chunk[0], chunk[1], chunk[2], chunk[3])
+            (chunk[0], chunk[1], chunk[2])
         };
         self.setup.render(frame, setup);
-        self.status.render(frame, status);
         self.results.render(frame, results);
         self.help.render(frame, help);
     }

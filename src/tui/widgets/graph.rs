@@ -56,7 +56,7 @@ impl Component for Graph {
     fn handle_key_press(&mut self, key: KeyEvent) {
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect) {
         let (_info, graph) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)

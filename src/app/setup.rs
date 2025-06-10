@@ -8,7 +8,7 @@ use supermusr_common::{Channel, DigitizerId};
 
 use crate::{
     finder::{MessageFinder, SearchTarget},
-    tui::{ComponentContainer, ComponentStyle, FocusableComponent, TextBox, TuiComponent, TuiComponentBuilder},
+    tui::{ComponentContainer, ComponentStyle, FocusableComponent, EditBox, TuiComponent, TuiComponentBuilder},
     Component, Timestamp,
 };
 
@@ -24,22 +24,22 @@ enum Focus {
 
 pub(crate) struct Setup {
     focus: Focus,
-    date: TuiComponent<TextBox<NaiveDate>>,
-    time: TuiComponent<TextBox<NaiveTime>>,
-    number: TuiComponent<TextBox<usize>>,
-    channel: TuiComponent<TextBox<Channel>>,
-    digitiser_id: TuiComponent<TextBox<DigitizerId>>,
+    date: TuiComponent<EditBox<NaiveDate>>,
+    time: TuiComponent<EditBox<NaiveTime>>,
+    number: TuiComponent<EditBox<usize>>,
+    channel: TuiComponent<EditBox<Channel>>,
+    digitiser_id: TuiComponent<EditBox<DigitizerId>>,
 }
 
 impl Setup {
     pub(crate) fn new(timestamp: Timestamp) -> TuiComponent<Self> {
         let comp = Self {
             focus: Default::default(),
-            date: TextBox::new(timestamp.date_naive(), Some("Date (YYYY-MM-DD)")),
-            time: TextBox::new(timestamp.time(), Some("Time (hh:mm:ss.f)")),
-            number: TextBox::new(1, Some("Number to Collect")),
-            channel: TextBox::new(1, Some("Channel to Seek")),
-            digitiser_id: TextBox::new(4, Some("Digitiser Id to Seek"))
+            date: EditBox::new(timestamp.date_naive(), Some("Date (YYYY-MM-DD)")),
+            time: EditBox::new(timestamp.time(), Some("Time (hh:mm:ss.f)")),
+            number: EditBox::new(1, Some("Number to Collect")),
+            channel: EditBox::new(1, Some("Channel to Seek")),
+            digitiser_id: EditBox::new(4, Some("Digitiser Id to Seek"))
         };
         let mut setup = TuiComponentBuilder::new(ComponentStyle::default()).build(comp);
         setup.focused_component_mut().set_focus(true);
@@ -126,7 +126,7 @@ impl Component for Setup {
         todo!()
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect) {
         let (datetime, number, channel, digitiser_id) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)

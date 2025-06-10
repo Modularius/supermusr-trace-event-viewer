@@ -16,7 +16,7 @@ use ratatui::{
 pub(crate) use builder::TuiComponentBuilder;
 pub(crate) use style::ComponentStyle;
 pub(crate) use tui_component::TuiComponent;
-pub(crate) use widgets::{TextBox, ListBox, Graph, Channels};
+pub(crate) use widgets::{TextBox, ListBox, Graph, Channels, Statusbar, EditBox};
 
 pub(crate) trait Component {
     fn handle_key_press(&mut self, key: KeyEvent);
@@ -25,7 +25,7 @@ pub(crate) trait Component {
         false
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect);
+    fn render(&self, frame: &mut Frame, area: Rect);
 
     fn help(&self) -> &'static str {
         ""

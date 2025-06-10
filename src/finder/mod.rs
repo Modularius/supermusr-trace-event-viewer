@@ -18,8 +18,10 @@ pub(crate) enum SearchStatus {
     #[default]
     Off,
     Text(String),
-    TraceSearchInProgress(u32,u32),
-    EventListSearchInProgress(u32,u32),
+    TraceSearchInProgress(u32),
+    TraceSearchFinished,
+    EventListSearchInProgress(u32),
+    EventListSearchFinished,
     Halted,
     Successful,
 }

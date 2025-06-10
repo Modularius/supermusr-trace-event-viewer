@@ -90,12 +90,12 @@ impl<D> Component for ListBox<D> where D: Clone + ToString + FromStr, <D as From
         }
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect) {
         let style = Style::new().bg(Color::Black).fg(Color::Gray);
         let select_style = Style::new().bg(Color::Green).fg(Color::Black);
         
         let (list_area, scrollbar_area) = {
-            let chunk = Layout::new()
+            let chunk = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Min(0), Constraint::Max(2)])
                 .split(area);

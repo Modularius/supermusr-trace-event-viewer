@@ -1,63 +1,96 @@
-use std::{io::Stdout, str::FromStr};
+use std::io::Stdout;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, symbols, widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState}, Frame
+    layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, widgets::{Block, Borders, Gauge, LineGauge}, Frame
 };
+use strum::{Display, EnumString};
+use tracing::info;
 
-use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{finder::SearchStatus, messages::Cache, tui::{ComponentStyle, FocusableComponent, TextBox, TuiComponent, TuiComponentBuilder}, Component, Select};
+
+#[derive(Default, EnumString, Display)]
+enum StatusMessage {
+    #[default]
+    #[strum(to_string = "Ready to Search. Press <Enter> to begin.")]
+    Waiting,
+    #[strum(to_string = "Searching Begun. Press <Esc> to halt.")]
+    SearchBegun,
+    #[strum(to_string = "Searching for Traces.")]
+    TraceSearchInProgress,
+    #[strum(to_string = "Search for Trace Finished.")]
+    TraceSearchFinished,
+    #[strum(to_string = "Searching for Event Lists.")]
+    EventListSearchInProgress,
+    #[strum(to_string = "Search for Event Lists Finished.")]
+    EventListSearchFinished,
+    #[strum(to_string = "Search Halted. Press <Enter> to search again.")]
+    SearchHalted,
+    #[strum(to_string = "Search Complete. Press <Enter> to search again.")]
+    SearchFinished,
+    #[strum(to_string = "{0}")]
+    Text(String)
+}
 
 pub(crate) struct Statusbar {
-    has_state_changed: bool,
-    has_focus: bool,
     parent_has_focus: bool,
-    state: ListState,
+    info: TuiComponent<TextBox<String>>,
+    status: TuiComponent<TextBox<StatusMessage>>,
+    progress_steps: u32,
+    num_step_passes: u32,
+    total_steps: u32,
 }
 
 impl Statusbar {
-    pub(crate) fn new(data: &[D], name: Option<&'static str>) -> TuiComponent<Self> {
-        let builder = TuiComponentBuilder::new(ComponentStyle::selectable())
-            .is_in_block(true);
-
-        if let Some(name) = name {
-            builder.with_name(name)
-        } else {
-            builder
-        }.build(Self {
-            data: data.to_vec(),
-            has_focus: false,
-            parent_has_focus: false,
-            state: ListState::default(),
-            has_state_changed: true,
-        })
+    pub(crate) fn new(select: &Select) -> TuiComponent<Self> {
+        TuiComponentBuilder::new(ComponentStyle::selectable())
+            .is_in_block(true)
+            .build(Self {
+                parent_has_focus: false,
+                info: TextBox::new(Default::default(), None),
+                status: TextBox::new(Default::default(), Some("Status")),
+                progress_steps: 0,
+                num_step_passes: select.step.num_step_passes,
+                total_steps: 2*select.step.num_step_passes + 4,
+            })
     }
 
-    pub(crate) fn set(&mut self, data: Vec<D>) {
-        self.data = data;
-        self.state = ListState::default()
-    }
+    pub(crate) fn set_status(&mut self, status: SearchStatus) {
+        match status {
+            SearchStatus::Off => self.status.underlying_mut().set(StatusMessage::SearchFinished),
+            SearchStatus::TraceSearchInProgress(prog) => {
+                self.status.underlying_mut().set(StatusMessage::TraceSearchInProgress);
+                self.progress_steps = prog + 1;
+            },
+            SearchStatus::TraceSearchFinished => {
+                self.status.underlying_mut().set(StatusMessage::TraceSearchFinished);
+                self.progress_steps = self.num_step_passes + 2;
+            },
+            SearchStatus::EventListSearchInProgress(prog) => {
+                self.status.underlying_mut().set(StatusMessage::EventListSearchFinished);
+                self.progress_steps = prog + self.num_step_passes + 2;
+            },
+            SearchStatus::Halted => self.status.underlying_mut().set(StatusMessage::SearchHalted),
+            SearchStatus::Successful => {
+                self.status.underlying_mut().set(StatusMessage::SearchFinished);
+                self.progress_steps = 2*self.num_step_passes + 3;
+            },
+            SearchStatus::Text(text) => self.status.underlying_mut().set(StatusMessage::Text(text)),
+            SearchStatus::EventListSearchFinished => {
 
-    pub(crate) fn get_index(&self) -> Option<usize> {
-        if self.data.is_empty() {
-            None
-        } else {
-            self.state.selected()
+            },
         }
+        info!("{0}",self.status.underlying().get());
+        info!("{0}",self.progress_steps);
     }
-    
 
-    pub(crate) fn pop_state_change(&mut self) -> bool {
-        let old_state_change = self.has_state_changed;
-        if self.has_state_changed {
-            self.has_state_changed = false;
-        }
-        old_state_change
+    pub(crate) fn set_info(&mut self, cache: &Cache) {
+        self.info.underlying_mut().set(format!("Number of traces/events: {}/{}", cache.iter_traces().len(), cache.iter_events().len()));
     }
 }
 
 impl FocusableComponent for Statusbar {
     fn set_focus(&mut self, focus: bool) {
-        self.has_focus = focus;
     }
 
     fn propagate_parental_focus(&mut self, focus: bool) {
@@ -67,54 +100,25 @@ impl FocusableComponent for Statusbar {
 
 impl Component for Statusbar {
     fn handle_key_press(&mut self, key: KeyEvent) {
-        if self.data.is_empty() {
-            return;
-        }
-        if self.has_focus {
-            if key.code == KeyCode::Up {
-                if let Some(selection) = self.state.selected() {
-                    self.state.select(Some((self.data.len() + selection - 1) % self.data.len()));
-                } else {
-                    self.state.select(Some(0));
-                }
-                self.has_state_changed = true;
-            } else if key.code == KeyCode::Down {
-                if let Some(selection) = self.state.selected() {
-                    self.state.select(Some((selection + 1) % self.data.len()));
-                } else {
-                    self.state.select(Some(0));
-                }
-                self.has_state_changed = true;
-            }
-        }
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
-        let style = Style::new().bg(Color::Black).fg(Color::Gray);
-        let select_style = Style::new().bg(Color::Green).fg(Color::Black);
-        
-        let (list_area, scrollbar_area) = {
-            let chunk = Layout::new()
+    fn render(&self, frame: &mut Frame, area: Rect) {
+        let (info, status, progress) = {
+            let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Min(0), Constraint::Max(2)])
+                .constraints([Constraint::Length(50), Constraint::Min(32), Constraint::Length(24)])
                 .split(area);
-            (chunk[0], chunk[1])
+            (chunk[0], chunk[1], chunk[2])
         };
 
-        let list = List::new(
-            self.data.iter()
-                .map(ToString::to_string)
-                .map(ListItem::new)
-                .collect::<Vec<_>>())
-            .style(style)
-            .highlight_symbol(symbols::bar::THREE_EIGHTHS)
-            .highlight_style(select_style);
+        let gauge = LineGauge::default()
+            .block(Block::new().borders(Borders::ALL))
+            .style(Style::new().fg(Color::LightGreen).bg(Color::Black))
+            .ratio(self.progress_steps as f64/self.total_steps as f64);
         
-        frame.render_stateful_widget(list, list_area, &mut self.state.clone());
 
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-        let mut scrollbar_state = ScrollbarState::default().content_length(18);
-        
-        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+        self.info.underlying().render(frame, info);
+        self.status.underlying().render(frame, status);
+        frame.render_widget(gauge, progress);
     }
 }

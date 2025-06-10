@@ -67,7 +67,7 @@ impl Component for Channels {
         }
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect) {
         if self.channels.is_empty() {
             return;
         }
@@ -75,7 +75,7 @@ impl Component for Channels {
         let style = Style::new().bg(Color::Rgb(0,64,0)).fg(Color::Gray);
         let select_style = Style::new().bg(Color::Green).fg(Color::Black).add_modifier(Modifier::BOLD);
 
-        let tabs = Tabs::new(self.channels.iter().map(|c|format!(" {c} ")).collect())
+        let tabs = Tabs::new(self.channels.iter().map(|c|format!(" {c} ")))
             .style(style)
             .highlight_style(select_style)
             //.divider(symbols::line::THICK_VERTICAL)

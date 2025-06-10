@@ -86,7 +86,7 @@ impl<C: Component> Component for TuiComponent<C> {
         self.comp.update()
     }
 
-    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect) {
         if self.config.is_in_block {
             let block = Block::new()
                 .borders(Borders::ALL)

@@ -48,18 +48,18 @@ impl<'a> SearchTask<'a> {
         let send_status = self.send_status;
 
         // Find Digitiser Traces
-        self.emit_status(SearchStatus::TraceSearchInProgress(0,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::TraceSearchInProgress(0)).await;
 
         let searcher = Searcher::new(&self.consumer, &self.topics.trace_topic, 1, send_status.clone());
         let mut iter = searcher.iter_backstep();
-        for step in (0..steps.num_step_passes).rev() {
-            self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
-            let sz = steps.min_step_size * steps.step_mul_coef.pow(step);
+        for step in 0..steps.num_step_passes {
+            self.emit_status(SearchStatus::TraceSearchInProgress(step)).await;
+            let sz = steps.min_step_size * steps.step_mul_coef.pow(steps.num_step_passes - 1 - step);
             iter.step_size(sz)
                 .backstep_until_time(|t| t > target.timestamp).await;
         }
 
-        self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes)).await;
 
         let results: Vec<TraceMessage> = iter
             .collect()
@@ -69,25 +69,25 @@ impl<'a> SearchTask<'a> {
             .collect()
             .into();
 
-        self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes + 1,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::TraceSearchFinished).await;
 
         for trace in results.iter() {
             cache.push_trace(&trace.get_unpacked_message().expect(""));
         }
 
         // Find Digitiser Event Lists
-        self.emit_status(SearchStatus::EventListSearchInProgress(0,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::EventListSearchInProgress(0)).await;
 
         let searcher = Searcher::new(&self.consumer, &self.topics.digitiser_event_topic, 1, send_status.clone());
         let mut iter = searcher.iter_backstep();
-        for step in (0..steps.num_step_passes).rev() {
-            self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes - 1 - step,steps.num_step_passes + 1)).await;
-            let sz = steps.min_step_size * steps.step_mul_coef.pow(step);
+        for step in 0..steps.num_step_passes {
+            self.emit_status(SearchStatus::EventListSearchInProgress(step)).await;
+            let sz = steps.min_step_size * steps.step_mul_coef.pow(steps.num_step_passes - 1 - step);
             iter.step_size(sz)
                 .backstep_until_time(|t| t > target.timestamp).await;
         }
 
-        self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes)).await;
 
         let results: Vec<EventListMessage> = iter
             .collect()
@@ -97,7 +97,7 @@ impl<'a> SearchTask<'a> {
             .collect()
             .into();
 
-        self.emit_status(SearchStatus::EventListSearchInProgress(steps.num_step_passes + 1,steps.num_step_passes + 1)).await;
+        self.emit_status(SearchStatus::EventListSearchFinished).await;
 
         for eventlist in results.iter() {
             cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
