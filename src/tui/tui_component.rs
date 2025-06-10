@@ -51,6 +51,10 @@ impl<C: Component> TuiComponent<C> {
     }
 }
 
+trait FocusedComponentCycler {
+    type Focus;
+}
+
 impl<C: ComponentContainer> ComponentContainer for TuiComponent<C> {
     fn focused_component(&self) -> &dyn FocusableComponent {
         self.comp.focused_component()

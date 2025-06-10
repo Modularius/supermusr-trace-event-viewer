@@ -1,9 +1,6 @@
 mod builder;
 mod style;
-mod textbox;
-mod listbox;
-mod graph;
-mod channels;
+mod widgets;
 mod tui_component;
 
 use std::io::Stdout;
@@ -19,10 +16,7 @@ use ratatui::{
 pub(crate) use builder::TuiComponentBuilder;
 pub(crate) use style::ComponentStyle;
 pub(crate) use tui_component::TuiComponent;
-pub(crate) use textbox::TextBox;
-pub(crate) use listbox::ListBox;
-pub(crate) use graph::Graph;
-pub(crate) use channels::Channels;
+pub(crate) use widgets::{TextBox, ListBox, Graph, Channels};
 
 pub(crate) trait Component {
     fn handle_key_press(&mut self, key: KeyEvent);

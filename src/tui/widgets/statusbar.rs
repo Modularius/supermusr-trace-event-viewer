@@ -1,0 +1,120 @@
+use std::{io::Stdout, str::FromStr};
+
+use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, symbols, widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState}, Frame
+};
+
+use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
+
+pub(crate) struct Statusbar {
+    has_state_changed: bool,
+    has_focus: bool,
+    parent_has_focus: bool,
+    state: ListState,
+}
+
+impl Statusbar {
+    pub(crate) fn new(data: &[D], name: Option<&'static str>) -> TuiComponent<Self> {
+        let builder = TuiComponentBuilder::new(ComponentStyle::selectable())
+            .is_in_block(true);
+
+        if let Some(name) = name {
+            builder.with_name(name)
+        } else {
+            builder
+        }.build(Self {
+            data: data.to_vec(),
+            has_focus: false,
+            parent_has_focus: false,
+            state: ListState::default(),
+            has_state_changed: true,
+        })
+    }
+
+    pub(crate) fn set(&mut self, data: Vec<D>) {
+        self.data = data;
+        self.state = ListState::default()
+    }
+
+    pub(crate) fn get_index(&self) -> Option<usize> {
+        if self.data.is_empty() {
+            None
+        } else {
+            self.state.selected()
+        }
+    }
+    
+
+    pub(crate) fn pop_state_change(&mut self) -> bool {
+        let old_state_change = self.has_state_changed;
+        if self.has_state_changed {
+            self.has_state_changed = false;
+        }
+        old_state_change
+    }
+}
+
+impl FocusableComponent for Statusbar {
+    fn set_focus(&mut self, focus: bool) {
+        self.has_focus = focus;
+    }
+
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
+    }
+}
+
+impl Component for Statusbar {
+    fn handle_key_press(&mut self, key: KeyEvent) {
+        if self.data.is_empty() {
+            return;
+        }
+        if self.has_focus {
+            if key.code == KeyCode::Up {
+                if let Some(selection) = self.state.selected() {
+                    self.state.select(Some((self.data.len() + selection - 1) % self.data.len()));
+                } else {
+                    self.state.select(Some(0));
+                }
+                self.has_state_changed = true;
+            } else if key.code == KeyCode::Down {
+                if let Some(selection) = self.state.selected() {
+                    self.state.select(Some((selection + 1) % self.data.len()));
+                } else {
+                    self.state.select(Some(0));
+                }
+                self.has_state_changed = true;
+            }
+        }
+    }
+
+    fn render(&self, frame: &mut Frame<CrosstermBackend<Stdout>>, area: Rect) {
+        let style = Style::new().bg(Color::Black).fg(Color::Gray);
+        let select_style = Style::new().bg(Color::Green).fg(Color::Black);
+        
+        let (list_area, scrollbar_area) = {
+            let chunk = Layout::new()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(0), Constraint::Max(2)])
+                .split(area);
+            (chunk[0], chunk[1])
+        };
+
+        let list = List::new(
+            self.data.iter()
+                .map(ToString::to_string)
+                .map(ListItem::new)
+                .collect::<Vec<_>>())
+            .style(style)
+            .highlight_symbol(symbols::bar::THREE_EIGHTHS)
+            .highlight_style(select_style);
+        
+        frame.render_stateful_widget(list, list_area, &mut self.state.clone());
+
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+        let mut scrollbar_state = ScrollbarState::default().content_length(18);
+        
+        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+    }
+}
