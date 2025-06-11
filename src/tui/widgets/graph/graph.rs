@@ -38,9 +38,11 @@ impl Bound {
         self.max - self.min
     }
 
-    fn transform(&mut self, source: &Bound, zoom_factor: f64, delta: f64) {
-        self.min = (source.min + delta)*zoom_factor;
-        self.max = (source.max + delta)*zoom_factor;
+    fn transform(&self, zoom_factor: f64, delta: f64) -> Self {
+        Self {
+            min: (self.min - delta)/zoom_factor + delta,
+            max: (self.max - delta)/zoom_factor + delta
+        }
     }
     
     fn make_axis<'a>(&self, title: &'static str, num_labels: i32) -> Axis<'static> {
@@ -66,13 +68,25 @@ impl Bounds {
         }
     }
 
-    fn transform(&mut self, source: &Bounds, zoom_factor: f64, delta: &Point) {
-        self.time.transform(&source.time, zoom_factor, delta.time);
-        self.intensity.transform(&source.intensity, zoom_factor, delta.intensity);
+    fn transform(&mut self, source: &Bounds, zoom_factor: f64, delta: &Point) -> Self {
+        Self{
+            time: source.time.transform(zoom_factor, delta.time),
+            intensity: source.intensity.transform(zoom_factor, delta.intensity)
+        }
+    }
+
+    fn is_in(&self, point: Point) -> bool {
+        self.time.min <= point.time && point.time <= self.time.max && self.intensity.min <= point.intensity && point.intensity <= self.intensity.max
     }
 }
 
 type Point = Pair<f64>;
+
+impl Into<(f64,f64)> for Point {
+    fn into(self) -> (f64,f64) {
+        (self.time, self.intensity)
+    }
+}
 
 pub(crate) struct GraphProperties {
     bounds: Bounds,
@@ -86,7 +100,7 @@ pub(crate) struct GraphProperties {
 impl GraphProperties {
     fn new(bounds: Bounds) -> Self {
         let zoomed_bounds = bounds.clone();
-        let view_port = Point::default();//bounds.mid_point();
+        let view_port = bounds.mid_point();
         
         let x_axis = bounds.time.make_axis("Time", 5);
         let y_axis = bounds.intensity.make_axis("Intensity", 5);
@@ -124,8 +138,8 @@ impl GraphProperties {
     }
 
     pub(crate) fn move_viewport(&mut self, time: f64, intensity: f64) {
-        self.view_port.time += time*self.zoomed_bounds.time.range()*SHIFT_COEF;
-        self.view_port.intensity += intensity*self.zoomed_bounds.intensity.range()*SHIFT_COEF;
+        self.view_port.time += time*SHIFT_COEF*self.zoomed_bounds.time.range();
+        self.view_port.intensity += intensity*SHIFT_COEF*self.zoomed_bounds.intensity.range();
 /*
         // If minimum time bound goes too far left, fix it
         if (self.time_bounds.0 - self.view_port.0)*self.zoom_factor < self.time_bounds.0 {
@@ -190,11 +204,12 @@ impl Graph where {
         let values = trace_data.iter().map(|e|e.1);
         let intensity_bounds = min_max(1.125, values.clone());
         
-        self.properties = Some(GraphProperties::new(Bounds { time: time_bounds, intensity: intensity_bounds}));
+        let properties = GraphProperties::new(Bounds { time: time_bounds, intensity: intensity_bounds});
 
         self.trace_data = trace_data.iter()
             .copied()
             .map(|(t,v)|(t as f64, v as f64))
+            .filter(|&(time, intensity)|properties.zoomed_bounds.is_in(Point{time, intensity}))
             .collect();
 
         self.event_data = event_data.as_ref()
@@ -205,6 +220,7 @@ impl Graph where {
                     .collect::<Vec<_>>()
             });
 
+        self.properties = Some(properties);
         self.hscroll_state = ScrollbarState::new(100).viewport_content_length(100);
         self.vscroll_state = ScrollbarState::new(100).viewport_content_length(100);
     }

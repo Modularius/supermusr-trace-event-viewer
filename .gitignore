@@ -2,7 +2,6 @@
 .vscode
 out
 src_tmp
-*.log
 
 # Added by cargo
 
