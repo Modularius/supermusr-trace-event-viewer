@@ -1,13 +1,19 @@
-use std::io::Stdout;
-
-use crossterm::event::KeyEvent;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, widgets::{Block, Borders, Gauge, LineGauge}, Frame
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    widgets::{Block, Borders, LineGauge},
+    Frame
 };
 use strum::{Display, EnumString};
 use tracing::info;
 
-use crate::{finder::SearchStatus, messages::Cache, tui::{ComponentStyle, FocusableComponent, TextBox, TuiComponent, TuiComponentBuilder}, Component, Select};
+use crate::{
+    finder::SearchStatus,
+    messages::Cache,
+    tui::{ComponentStyle, FocusableComponent, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder},
+    Component,
+    Select
+};
 
 #[derive(Default, EnumString, Display)]
 enum StatusMessage {
@@ -57,51 +63,39 @@ impl Statusbar {
 
     pub(crate) fn set_status(&mut self, status: SearchStatus) {
         match status {
-            SearchStatus::Off => self.status.underlying_mut().set(StatusMessage::SearchFinished),
+            SearchStatus::Off => self.status.set(StatusMessage::SearchFinished),
             SearchStatus::TraceSearchInProgress(prog) => {
-                self.status.underlying_mut().set(StatusMessage::TraceSearchInProgress);
+                self.status.set(StatusMessage::TraceSearchInProgress);
                 self.progress_steps = prog + 1;
             },
             SearchStatus::TraceSearchFinished => {
-                self.status.underlying_mut().set(StatusMessage::TraceSearchFinished);
+                self.status.set(StatusMessage::TraceSearchFinished);
                 self.progress_steps = self.num_step_passes + 2;
             },
             SearchStatus::EventListSearchInProgress(prog) => {
-                self.status.underlying_mut().set(StatusMessage::EventListSearchFinished);
+                self.status.set(StatusMessage::EventListSearchFinished);
                 self.progress_steps = prog + self.num_step_passes + 2;
             },
-            SearchStatus::Halted => self.status.underlying_mut().set(StatusMessage::SearchHalted),
+            SearchStatus::Halted => self.status.set(StatusMessage::SearchHalted),
             SearchStatus::Successful => {
-                self.status.underlying_mut().set(StatusMessage::SearchFinished);
+                self.status.set(StatusMessage::SearchFinished);
                 self.progress_steps = 2*self.num_step_passes + 3;
             },
-            SearchStatus::Text(text) => self.status.underlying_mut().set(StatusMessage::Text(text)),
+            SearchStatus::Text(text) => self.status.set(StatusMessage::Text(text)),
             SearchStatus::EventListSearchFinished => {
 
             },
         }
-        info!("{0}",self.status.underlying().get());
+        info!("{0}",self.status.get());
         info!("{0}",self.progress_steps);
     }
 
     pub(crate) fn set_info(&mut self, cache: &Cache) {
-        self.info.underlying_mut().set(format!("Number of traces/events: {}/{}", cache.iter_traces().len(), cache.iter_events().len()));
-    }
-}
-
-impl FocusableComponent for Statusbar {
-    fn set_focus(&mut self, focus: bool) {
-    }
-
-    fn propagate_parental_focus(&mut self, focus: bool) {
-        self.parent_has_focus = focus;
+        self.info.set(format!("Number of traces/events: {}/{}", cache.iter_traces().len(), cache.iter_events().len()));
     }
 }
 
 impl Component for Statusbar {
-    fn handle_key_press(&mut self, key: KeyEvent) {
-    }
-
     fn render(&self, frame: &mut Frame, area: Rect) {
         let (info, status, progress) = {
             let chunk = Layout::default()
@@ -117,8 +111,14 @@ impl Component for Statusbar {
             .ratio(self.progress_steps as f64/self.total_steps as f64);
         
 
-        self.info.underlying().render(frame, info);
-        self.status.underlying().render(frame, status);
+        self.info.render(frame, info);
+        self.status.render(frame, status);
         frame.render_widget(gauge, progress);
+    }
+}
+
+impl ParentalFocusComponent for Statusbar {
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
     }
 }

@@ -3,13 +3,10 @@ mod style;
 mod widgets;
 mod tui_component;
 
-use std::io::Stdout;
-
 use crossterm::event::KeyEvent;
 use ratatui::{
-    layout::{Alignment, Rect},
-    prelude::CrosstermBackend,
-    widgets::{block::Title, Block, BorderType},
+    layout::Rect,
+    widgets::{Block, BorderType},
     Frame,
 };
 
@@ -19,22 +16,25 @@ pub(crate) use tui_component::TuiComponent;
 pub(crate) use widgets::{TextBox, ListBox, Graph, Channels, Statusbar, EditBox};
 
 pub(crate) trait Component {
-    fn handle_key_press(&mut self, key: KeyEvent);
-
-    fn update(&mut self) -> bool {
-        false
-    }
-
     fn render(&self, frame: &mut Frame, area: Rect);
-
-    fn help(&self) -> &'static str {
-        ""
-    }
 }
 
-pub(crate) trait FocusableComponent: Component {
-    fn set_focus(&mut self, focus: bool);
+pub(crate) trait ComponentContainer : Component {
+    //fn focused_component(&self) -> &dyn FocusableComponent;
 
+    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent;
+}
+
+
+pub(crate) trait InputComponent : Component {
+    fn handle_key_press(&mut self, key: KeyEvent);
+}
+
+pub(crate) trait FocusableComponent: InputComponent {
+    fn set_focus(&mut self, focus: bool);
+}
+
+pub(crate) trait ParentalFocusComponent: Component {
     fn propagate_parental_focus(&mut self, focus: bool);
 }
 
@@ -45,17 +45,13 @@ pub(crate) trait BlockExt {
 
 impl BlockExt for Block<'_> {
     fn set_title<C: Component>(self, comp: &TuiComponent<C>) -> Self {
-        
         let name = if comp.has_focus() {
             comp.get_builder().selected_name.or(comp.get_builder().name)
         } else {
             comp.get_builder().name
         };
         if let Some(name) = name {
-            let title = Title::default()
-                .alignment(Alignment::Center)
-                .content(name);
-            self.title(title)
+            self.title_top(name)
         } else {
             self
         }
@@ -78,10 +74,4 @@ impl BlockExt for Block<'_> {
             }
         }
     }
-}
-
-pub(crate) trait ComponentContainer : Component {
-    fn focused_component(&self) -> &dyn FocusableComponent;
-
-    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent;
 }

@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{tui::{ComponentStyle, FocusableComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
 
 pub(crate) struct TextBox<D> {
     parent_has_focus: bool,
@@ -40,20 +40,7 @@ impl<D> TextBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::D
     }
 }
 
-impl<D> FocusableComponent for TextBox<D> where D: ToString {
-    fn set_focus(&mut self, focus: bool) {
-        
-    }
-
-    fn propagate_parental_focus(&mut self, focus: bool) {
-        self.parent_has_focus = focus;
-    }
-}
-
 impl<D> Component for TextBox<D> where D: ToString {
-    fn handle_key_press(&mut self, key: KeyEvent) {
-    }
-
     fn render(&self, frame: &mut Frame, area: Rect) {
         let style = Style::new().bg(Color::Black).fg(Color::Gray);
         
@@ -61,6 +48,11 @@ impl<D> Component for TextBox<D> where D: ToString {
             .alignment(Alignment::Center)
             .style(style);
         frame.render_widget(paragraph, area);
-        
+    }
+}
+
+impl<D> ParentalFocusComponent for TextBox<D> where D: ToString {
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
     }
 }

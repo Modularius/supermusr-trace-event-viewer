@@ -9,7 +9,7 @@ mod tui;
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    event::{self, Event},
     execute,
     terminal::{self, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -29,13 +29,12 @@ use tokio::{
     time,
 };
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt};
-use tracing::warn;
 
 use crate::{
     app::App,
     cli_structs::{Select, Topics, UserBounds},
     finder::SearchEngine,
-    tui::Component,
+    tui::{Component, InputComponent},
 };
 
 type Timestamp = DateTime<Utc>;
@@ -146,16 +145,16 @@ async fn main() -> anyhow::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let search = SearchEngine::new(consumer, &args.select, &args.topics);
-    let mut app = App::new(search, &args.select);
+    let search_engine = SearchEngine::new(consumer, &args.select, &args.topics);
+    let mut app = App::new(search_engine, &args.select);
 
     let mut sigint = signal(SignalKind::interrupt())?;
 
     let mut app_update = tokio::time::interval(time::Duration::from_millis(100));
 
-    let mut engine_update = tokio::time::interval(time::Duration::from_millis(100));
-    
-    terminal.draw(|frame|app.render(frame, frame.size()))?;
+    let mut search_engine_update = tokio::time::interval(time::Duration::from_millis(100));
+
+    terminal.draw(|frame|app.render(frame, frame.area()))?;
 
     loop {
         tokio::select! {
@@ -170,15 +169,15 @@ async fn main() -> anyhow::Result<()> {
                     _ => {}
                 }
                 if app.changed() {
-                    terminal.draw(|frame|app.render(frame, frame.size()))?;
+                    terminal.draw(|frame|app.render(frame, frame.area()))?;
                 }
                 if app.is_quit() {
                     break;
                 }
-                app.run();
+                app.update();
             },
-            _ = engine_update.tick() => {
-                app.async_run().await
+            _ = search_engine_update.tick() => {
+                app.async_update().await
             },
             _ = sigint.recv() => {
                 break;

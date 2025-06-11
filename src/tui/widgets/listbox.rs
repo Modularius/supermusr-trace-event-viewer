@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Style}, symbols, widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState}, Frame
 };
 
-use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{tui::{ComponentStyle, FocusableComponent, InputComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
 
 pub(crate) struct ListBox<D> {
     has_state_changed: bool,
@@ -56,40 +56,7 @@ impl<D> ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std
     }
 }
 
-impl<D> FocusableComponent for ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
-    fn set_focus(&mut self, focus: bool) {
-        self.has_focus = focus;
-    }
-
-    fn propagate_parental_focus(&mut self, focus: bool) {
-        self.parent_has_focus = focus;
-    }
-}
-
 impl<D> Component for ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
-    fn handle_key_press(&mut self, key: KeyEvent) {
-        if self.data.is_empty() {
-            return;
-        }
-        if self.has_focus {
-            if key.code == KeyCode::Up {
-                if let Some(selection) = self.state.selected() {
-                    self.state.select(Some((self.data.len() + selection - 1) % self.data.len()));
-                } else {
-                    self.state.select(Some(0));
-                }
-                self.has_state_changed = true;
-            } else if key.code == KeyCode::Down {
-                if let Some(selection) = self.state.selected() {
-                    self.state.select(Some((selection + 1) % self.data.len()));
-                } else {
-                    self.state.select(Some(0));
-                }
-                self.has_state_changed = true;
-            }
-        }
-    }
-
     fn render(&self, frame: &mut Frame, area: Rect) {
         let style = Style::new().bg(Color::Black).fg(Color::Gray);
         let select_style = Style::new().bg(Color::Green).fg(Color::Black);
@@ -117,5 +84,44 @@ impl<D> Component for ListBox<D> where D: Clone + ToString + FromStr, <D as From
         let mut scrollbar_state = ScrollbarState::default().content_length(18);
         
         frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+    }
+}
+
+impl<D> InputComponent for ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+    fn handle_key_press(&mut self, key: KeyEvent) {
+        if self.data.is_empty() {
+            return;
+        }
+        if self.has_focus {
+            if key.code == KeyCode::Up {
+                if let Some(selection) = self.state.selected() {
+                    self.state.select(Some((self.data.len() + selection - 1) % self.data.len()));
+                } else {
+                    self.state.select(Some(0));
+                }
+                self.has_state_changed = true;
+            } else if key.code == KeyCode::Down {
+                if let Some(selection) = self.state.selected() {
+                    self.state.select(Some((selection + 1) % self.data.len()));
+                } else {
+                    self.state.select(Some(0));
+                }
+                self.has_state_changed = true;
+            }
+        }
+    }
+}
+
+
+impl<D> ParentalFocusComponent for ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
+    }
+}
+
+
+impl<D> FocusableComponent for ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+    fn set_focus(&mut self, focus: bool) {
+        self.has_focus = focus;
     }
 }

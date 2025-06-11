@@ -1,16 +1,16 @@
-use std::io::Stdout;
-
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    prelude::CrosstermBackend,
     Frame,
 };
 use strum::{EnumIter, IntoEnumIterator};
-use tracing::info;
 
 use crate::{
-    app::{results::Results, setup::Setup}, finder::{MessageFinder, SearchStatus}, tui::{Component, ComponentContainer, FocusableComponent, TextBox, TuiComponent}, Select
+    app::{Display, Results, Setup},
+    finder::MessageFinder,
+    messages::Cache,
+    tui::{Component, ComponentContainer, FocusableComponent, InputComponent, Statusbar, TextBox, TuiComponent},
+    Select
 };
 
 #[derive(Default, Debug, Clone, EnumIter)]
@@ -18,15 +18,19 @@ enum Focus {
     #[default]
     Setup,
     Results,
+    Display,
 }
 
 pub(crate) struct App<M> {
+    cache: Option<Cache>,
     quit: bool,
     is_changed: bool,
     message_finder: M,
     focus: Focus,
     setup: TuiComponent<Setup>,
+    status: TuiComponent<Statusbar>,
     results: TuiComponent<Results>,
+    display: TuiComponent<Display>,
     help: TuiComponent<TextBox<String>>,
 }
 
@@ -35,10 +39,13 @@ impl<'a, M: MessageFinder> App<M> {
         let mut app = App {
             quit: false,
             is_changed: true,
+            cache: None,
             message_finder,
             focus: Default::default(),
-            setup: Setup::new(select.timestamp),
-            results: Results::new(select),
+            setup: Setup::new(select),
+            status: Statusbar::new(select),
+            results: Results::new(),
+            display: Display::new(),
             help: TextBox::new(Default::default(), None),
         };
         app.focused_component_mut().set_focus(true);
@@ -53,39 +60,78 @@ impl<'a, M: MessageFinder> App<M> {
         self.quit
     }
 
-    pub(crate) async fn async_run(&mut self) {
+    /// Updates the search engine.
+    /// 
+    /// This function is called asynchronously,
+    /// hence it cannot be part of [Self::update].
+    pub(crate) async fn async_update(&mut self) {
         self.message_finder.run().await;
     }
 
-    pub(crate) fn run(&mut self) {
+    /// Causes the function to pop any status messages or results from the [MessageFinder],
+    /// as well as calling update methods of some of the apps subcomponents.
+    pub(crate) fn update(&mut self) {
+        // If a status message is available, pop it from the [MessageFinder].
         if let Some(status) = self.message_finder.status() {
-            self.results.underlying_mut().set_status(status);
+            self.status.set_status(status);
             self.is_changed = true;
         }
+        // If a result is available, pop it from the [MessageFinder].
         if let Some(cache) = self.message_finder.cache() {
-            self.results.underlying_mut().push(cache);
+            self.results.new_cache(&cache);
+            self.status.set_info(&cache);
+
+            // Take ownership of the cache
+            self.cache = Some(cache);
+
             self.is_changed = true;
+        }
+
+        // If there is a message cache available, call update on [Self::results].
+        if let Some(cache) = &self.cache {
+            self.results.update(cache);
         }
     }
 }
 
-impl<'a, M: MessageFinder> ComponentContainer for App<M> {
-    fn focused_component(&self) -> &dyn FocusableComponent {
-        match self.focus {
-            Focus::Setup => &self.setup,
-            Focus::Results => &self.results,
-        }
-    }
-
+impl<M: MessageFinder> ComponentContainer for App<M> {
     fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
         match self.focus {
             Focus::Setup => &mut self.setup,
             Focus::Results => &mut self.results,
+            Focus::Display => &mut self.display,
         }
     }
 }
 
-impl<'a, M: MessageFinder> Component for App<M> {
+impl<M: MessageFinder> Component for App<M> {
+    fn render(&self, frame: &mut Frame, area: Rect) {
+        let (setup, status, results_display, help) = {
+            let chunk = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Length(6), Constraint::Length(5), Constraint::Min(8), Constraint::Length(3)])
+                .split(area);
+            (chunk[0], chunk[1], chunk[2], chunk[3])
+        };
+
+        
+        let (results, graph) = {
+            let chunk = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Length(50), Constraint::Min(64)])
+                .split(results_display);
+            (chunk[0], chunk[1])
+        };
+
+        self.setup.render(frame, setup);
+        self.status.render(frame, status);
+        self.results.render(frame, results);
+        self.display.render(frame, graph);
+        self.help.render(frame, help);
+    }
+}
+
+impl<M: MessageFinder> InputComponent for App<M> {
     fn handle_key_press(&mut self, key: KeyEvent) {
         if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
             self.quit = true;
@@ -102,31 +148,30 @@ impl<'a, M: MessageFinder> Component for App<M> {
         } else if key == KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE) {
             match self.focus {
                 Focus::Setup => {
-                    self.setup.underlying_mut()
+                    self.setup
                         .search(&mut self.message_finder);
                 }
                 Focus::Results => {
-                    if let Some((metadata, trace)) = self.results.underlying_mut().select() {
-                        
+                    if let Some(cache) = &self.cache {
+                        if let Some((_, trace, channel)) = self.results.select(cache) {
+                            self.display.select(
+                                trace.traces
+                                    .get(&channel)
+                                    .expect(""),
+                                trace.events
+                                    .as_ref()
+                                    .and_then(|events|events.get(&channel)));
+
+                            
+                        }
                     }
+                }
+                Focus::Display => {
                 }
             }
         } else {
             self.focused_component_mut().handle_key_press(key);
         }
         self.is_changed = true;
-    }
-
-    fn render(&self, frame: &mut Frame, area: Rect) {
-        let (setup, results, help) = {
-            let chunk = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(6), Constraint::Min(8), Constraint::Length(3)])
-                .split(area);
-            (chunk[0], chunk[1], chunk[2])
-        };
-        self.setup.render(frame, setup);
-        self.results.render(frame, results);
-        self.help.render(frame, help);
     }
 }

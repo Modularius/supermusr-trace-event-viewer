@@ -1,15 +1,14 @@
-use std::{io::Stdout, str::FromStr};
+use std::str::FromStr;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Alignment, Rect},
-    prelude::CrosstermBackend,
     style::{Color, Style},
     widgets::Paragraph,
     Frame,
 };
 
-use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{tui::{ComponentStyle, FocusableComponent, InputComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
 use tui_input::backend::crossterm::EventHandler;
 use tui_input::Input;
 
@@ -49,17 +48,19 @@ impl<D> EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::D
     }
 }
 
-impl<D> FocusableComponent for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
-    fn set_focus(&mut self, focus: bool) {
-        self.has_focus = focus;
-    }
-
-    fn propagate_parental_focus(&mut self, focus: bool) {
-        self.parent_has_focus = focus;
+impl<D> Component for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+    fn render(&self, frame: &mut Frame, area: Rect) {
+        let style = Style::new().bg(Color::Black).fg(if self.error { Color::Red } else { Color::Gray });
+        
+        let paragraph = Paragraph::new(self.input.value())
+            .alignment(Alignment::Center)
+            .style(style);
+        frame.render_widget(paragraph, area);
+        
     }
 }
 
-impl<D> Component for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+impl<D> InputComponent for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
     fn handle_key_press(&mut self, key: KeyEvent) {
         if self.has_focus {
             if key == KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE) {
@@ -79,14 +80,17 @@ impl<D> Component for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Er
             }
         }
     }
+}
 
-    fn render(&self, frame: &mut Frame, area: Rect) {
-        let style = Style::new().bg(Color::Black).fg(if self.error { Color::Red } else { Color::Gray });
-        
-        let paragraph = Paragraph::new(self.input.value())
-            .alignment(Alignment::Center)
-            .style(style);
-        frame.render_widget(paragraph, area);
-        
+impl<D> FocusableComponent for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+    fn set_focus(&mut self, focus: bool) {
+        self.has_focus = focus;
+    }
+}
+
+
+impl<D> ParentalFocusComponent for EditBox<D> where D: ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
     }
 }

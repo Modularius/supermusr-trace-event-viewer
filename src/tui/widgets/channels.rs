@@ -1,12 +1,10 @@
-use std::{io::Stdout, str::FromStr};
-
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, style::{Color, Modifier, Style}, symbols, widgets::{Block, List, ListItem, Padding, Paragraph, Tabs}, Frame
+    layout::Rect, style::{Color, Modifier, Style}, widgets::Tabs, Frame
 };
 use supermusr_common::Channel;
 
-use crate::{tui::{ComponentStyle, FocusableComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{tui::{ComponentStyle, FocusableComponent, InputComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
 
 #[derive(Clone)]
 pub(crate) struct Channels {
@@ -43,30 +41,7 @@ impl Channels {
     }
 }
 
-impl FocusableComponent for Channels {
-    fn set_focus(&mut self, focus: bool) {
-        self.has_focus = focus;
-    }
-
-    fn propagate_parental_focus(&mut self, focus: bool) {
-        self.parent_has_focus = focus;
-    }
-}
-
 impl Component for Channels {
-    fn handle_key_press(&mut self, key: KeyEvent) {
-        if self.channels.is_empty() {
-            return;
-        }
-        if self.has_focus {
-            if key.code == KeyCode::Left {
-                self.channel_index = (self.channels.len() + self.channel_index - 1) % self.channels.len();
-            } else if key.code == KeyCode::Right {
-                self.channel_index = (self.channel_index + 1) % self.channels.len();
-            }
-        }
-    }
-
     fn render(&self, frame: &mut Frame, area: Rect) {
         if self.channels.is_empty() {
             return;
@@ -82,5 +57,32 @@ impl Component for Channels {
             .select(self.channel_index);
 
         frame.render_widget(tabs, area);
+    }
+}
+
+impl InputComponent for Channels {
+    fn handle_key_press(&mut self, key: KeyEvent) {
+        if self.channels.is_empty() {
+            return;
+        }
+        if self.has_focus {
+            if key.code == KeyCode::Left {
+                self.channel_index = (self.channels.len() + self.channel_index - 1) % self.channels.len();
+            } else if key.code == KeyCode::Right {
+                self.channel_index = (self.channel_index + 1) % self.channels.len();
+            }
+        }
+    }
+}
+
+impl ParentalFocusComponent for Channels {
+    fn propagate_parental_focus(&mut self, focus: bool) {
+        self.parent_has_focus = focus;
+    }
+}
+
+impl FocusableComponent for Channels {
+    fn set_focus(&mut self, focus: bool) {
+        self.has_focus = focus;
     }
 }
