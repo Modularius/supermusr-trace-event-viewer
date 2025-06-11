@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::{Constraint, Direction, Layout, Rect}, Frame};
 
 use crate::{
-    messages::{EventList, Trace}, tui::{ComponentStyle, FocusableComponent, Graph, InputComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component
+    messages::{EventList, Trace}, tui::{ComponentStyle, FocusableComponent, Graph, GraphProperties, InputComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component
 };
 
 pub(crate) struct Display {
@@ -44,17 +44,17 @@ impl Component for Display {
 impl InputComponent for Display {
     fn handle_key_press(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Char('+') {
-            
+            self.graph.get_properties_mut().map(GraphProperties::zoom_in);
         } else if key.code == KeyCode::Char('-') {
-            
+            self.graph.get_properties_mut().map(GraphProperties::zoom_out);
         } else if key.code == KeyCode::Up {
-            
+            self.graph.get_properties_mut().map(|p|p.move_viewport(0.0, 1.0));
         } else if key.code == KeyCode::Down {
-            
+            self.graph.get_properties_mut().map(|p|p.move_viewport(0.0, -1.0));
         } else if key.code == KeyCode::Left {
-            
+            self.graph.get_properties_mut().map(|p|p.move_viewport(-1.0, 0.0));
         } else if key.code == KeyCode::Right {
-            
+            self.graph.get_properties_mut().map(|p|p.move_viewport(1.0, 0.0));
         }
     }
 }

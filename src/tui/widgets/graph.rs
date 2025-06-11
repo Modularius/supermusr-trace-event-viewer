@@ -1,23 +1,153 @@
-use std::iter::Empty;
-
-use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols::Marker,
     text::Span,
-    widgets::{Axis, Chart, Dataset, GraphType},
+    widgets::{Axis, Chart, Dataset, GraphType, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame
 };
-use supermusr_common::Time;
 
-use crate::{messages::{Event, EventList, Trace}, tui::{ComponentStyle, FocusableComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{messages::{EventList, Trace}, tui::{ComponentStyle, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
+
+fn min_max<'a, D: Default + Ord + Into<f64>, I : Iterator<Item = D> + Clone>(buffer: f64, data: I) -> Bound {
+    let min: f64 = data.clone().min().unwrap_or_default().into();
+    let max: f64 = buffer*(data.max().unwrap_or_default().into());
+    Bound { min, max }
+}
+
+const SHIFT_COEF : f64 = 0.1;
+
+#[derive(Default, Clone)]
+struct Pair<D: Default> {
+    time: D,
+    intensity: D,
+}
+
+#[derive(Default, Clone)]
+struct Bound {
+    min: f64,
+    max: f64,
+}
+
+impl Bound {
+    fn mid_point(&self) -> f64 {
+        (self.max + self.min)/2.0
+    }
+    
+    fn range(&self) -> f64 {
+        self.max - self.min
+    }
+
+    fn transform(&mut self, source: &Bound, zoom_factor: f64, delta: f64) {
+        self.min = (source.min + delta)*zoom_factor;
+        self.max = (source.max + delta)*zoom_factor;
+    }
+    
+    fn make_axis<'a>(&self, title: &'static str, num_labels: i32) -> Axis<'static> {
+        let labels: Vec<_> = (0..num_labels)
+            .map(|i|self.range()*i as f64/num_labels as f64 + self.min)
+            .map(|v|Span::raw(v.to_string()))
+            .collect();
+        Axis::default()
+            .title(title)
+            .bounds([self.min, self.max])
+            .labels(labels)
+    }
+}
+
+
+type Bounds = Pair<Bound>;
+
+impl Bounds {
+    fn mid_point(&self) -> Point {
+        Point {
+            time: self.time.mid_point(),
+            intensity: self.intensity.mid_point(),
+        }
+    }
+
+    fn transform(&mut self, source: &Bounds, zoom_factor: f64, delta: &Point) {
+        self.time.transform(&source.time, zoom_factor, delta.time);
+        self.intensity.transform(&source.intensity, zoom_factor, delta.intensity);
+    }
+}
+
+type Point = Pair<f64>;
 
 pub(crate) struct GraphProperties {
-    time_bounds: (f64, f64),
-    intensity_bounds: (f64, f64),
+    bounds: Bounds,
+    zoomed_bounds: Bounds,
+    view_port: Point,
+    zoom_factor: f64,
     x_axis: Axis<'static>,
     y_axis: Axis<'static>,
+}
+
+impl GraphProperties {
+    fn new(bounds: Bounds) -> Self {
+        let zoomed_bounds = bounds.clone();
+        let view_port = Point::default();//bounds.mid_point();
+        
+        let x_axis = bounds.time.make_axis("Time", 5);
+        let y_axis = bounds.intensity.make_axis("Intensity", 5);
+        Self {
+            bounds,
+            zoomed_bounds,
+            view_port,
+            zoom_factor: 1.0,
+            x_axis,
+            y_axis,
+        }
+    }
+
+    fn calc_axes(&mut self) {
+        self.zoomed_bounds.transform(&self.bounds, self.zoom_factor, &self.view_port);
+
+        self.x_axis = self.zoomed_bounds.time.make_axis("Time", 5);
+        self.y_axis = self.zoomed_bounds.intensity.make_axis("Intensity", 5);
+    }
+
+    pub(crate) fn zoom_in(&mut self) {
+        self.zoom_factor *= 1.1;
+        if self.zoom_factor > 4.0 {
+            self.zoom_factor = 4.0;
+        }
+        self.calc_axes();
+    }
+
+    pub(crate) fn zoom_out(&mut self) {
+        self.zoom_factor /= 1.1;
+        if self.zoom_factor < 1.0 {
+            self.zoom_factor = 1.0;
+        }
+        self.calc_axes();
+    }
+
+    pub(crate) fn move_viewport(&mut self, time: f64, intensity: f64) {
+        self.view_port.time += time*self.zoomed_bounds.time.range()*SHIFT_COEF;
+        self.view_port.intensity += intensity*self.zoomed_bounds.intensity.range()*SHIFT_COEF;
+/*
+        // If minimum time bound goes too far left, fix it
+        if (self.time_bounds.0 - self.view_port.0)*self.zoom_factor < self.time_bounds.0 {
+            self.view_port.0 = self.time_bounds.0 - self.time_bounds.0/self.zoom_factor;
+        }
+        
+        // If maximum time bound goes too far right, fix it
+        if (self.time_bounds.1 - self.view_port.0)*self.zoom_factor > self.time_bounds.1 {
+            self.view_port.0 = self.time_bounds.1 - self.time_bounds.1/self.zoom_factor;
+        }
+        
+        // If minimum intensity bound goes too far down, fix it
+        if (self.intensity_bounds.0 - self.view_port.1)*self.zoom_factor < self.intensity_bounds.0 {
+            self.view_port.1 = self.intensity_bounds.0 - self.intensity_bounds.0/self.zoom_factor;
+        }
+        
+        // If maximum intensity bound goes too far up, fix it
+        if (self.intensity_bounds.1 - self.view_port.1)*self.zoom_factor > self.intensity_bounds.1 {
+            self.view_port.1 = self.intensity_bounds.1 - self.intensity_bounds.1/self.zoom_factor;
+        } */
+        self.calc_axes();
+    }
 }
 
 pub(crate) struct Graph {
@@ -25,7 +155,8 @@ pub(crate) struct Graph {
     trace_data: Vec<(f64,f64)>,
     event_data: Option<Vec<(f64,f64)>>,
     properties: Option<GraphProperties>,
-    //zoom: f64,
+    hscroll_state: ScrollbarState,
+    vscroll_state: ScrollbarState,
 }
 
 impl Graph where {
@@ -37,6 +168,8 @@ impl Graph where {
                 event_data: None,
                 parent_has_focus: false,
                 properties: None,
+                hscroll_state: ScrollbarState::default(),
+                vscroll_state: ScrollbarState::default(),
             }
         )
     }
@@ -52,20 +185,12 @@ impl Graph where {
             .map(|events|events.iter().map(|e|(e.time,e.intensity)).collect());
 
         let time = trace_data.iter().map(|e|e.0 as u32);
-        let time_bounds = Self::min_max(1.0625, time.clone());
-
-        let x_axis = Self::make_axis("Time", 5, &time_bounds);
+        let time_bounds = min_max(1.0625, time.clone());
         
         let values = trace_data.iter().map(|e|e.1);
-        let intensity_bounds = Self::min_max(1.125, values.clone());
-        let y_axis = Self::make_axis("Intensity", 5, &intensity_bounds);
+        let intensity_bounds = min_max(1.125, values.clone());
         
-        self.properties = Some(GraphProperties {
-            time_bounds,
-            intensity_bounds,
-            x_axis,
-            y_axis
-        });
+        self.properties = Some(GraphProperties::new(Bounds { time: time_bounds, intensity: intensity_bounds}));
 
         self.trace_data = trace_data.iter()
             .copied()
@@ -79,20 +204,13 @@ impl Graph where {
                     .map(|e|(e.0 as f64, e.1 as f64))
                     .collect::<Vec<_>>()
             });
+
+        self.hscroll_state = ScrollbarState::new(100).viewport_content_length(100);
+        self.vscroll_state = ScrollbarState::new(100).viewport_content_length(100);
     }
 
-    fn min_max<'a, D: Default + Ord + Into<f64>, I : Iterator<Item = D> + Clone>(buffer: f64, data: I) -> (f64,f64) {
-        let min: f64 = data.clone().min().unwrap_or_default().into();
-        let max: f64 = buffer*(data.max().unwrap_or_default().into());
-        (min, max)
-    }
-
-    fn make_axis<'a>(title: &'static str, num_labels: i32, &(min, max): &(f64,f64)) -> Axis<'static> {
-        let labels = (0..num_labels).map(|i|(max - min)*i as f64/num_labels as f64 + min).map(|v|Span::raw(v.to_string())).collect::<Vec<_>>();
-        Axis::default()
-            .title(title)
-            .bounds([min, max])
-            .labels(labels)
+    pub(crate) fn get_properties_mut(&mut self) -> Option<&mut GraphProperties> {
+        self.properties.as_mut()
     }
 }
 
@@ -106,6 +224,32 @@ impl Component for Graph {
                     .split(area);
                 (chunk[0], chunk[1])
             };
+            
+            let (graph, hscroll) = {
+                let chunk1 = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(1)])
+                    .split(graph);
+                
+                let chunk2 = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Min(0), Constraint::Length(1)])
+                    .split(chunk1[1]);
+                (chunk1[0], chunk2[1])
+            };
+            
+            let (graph, vscroll) = {
+                let chunk = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Min(0), Constraint::Length(1)])
+                    .split(graph);
+                (chunk[0], chunk[1])
+            };
+
+            let horiz_scroll = Scrollbar::new(ScrollbarOrientation::HorizontalBottom);
+            let vert_scroll = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+            frame.render_stateful_widget(horiz_scroll, hscroll, &mut self.hscroll_state.clone());
+            frame.render_stateful_widget(vert_scroll, vscroll, &mut self.vscroll_state.clone());
 
             let trace_dataset = Dataset::default()
                 .name("Trace")
@@ -123,24 +267,11 @@ impl Component for Graph {
                         .data(event_data.as_slice())
             });
 
-            /*let zoom_box = [
-                    (properties.time_bounds.0 + 1000.0, properties.intensity_bounds.0 + 10.0),
-                    (properties.time_bounds.1 - 1000.0, properties.intensity_bounds.0 + 10.0),
-                    (properties.time_bounds.1 - 1000.0, properties.intensity_bounds.1 - 10.0),
-                    (properties.time_bounds.0 + 1000.0, properties.intensity_bounds.1 - 10.0),
-                    (properties.time_bounds.0 + 1000.0, properties.intensity_bounds.0 + 10.0),
-                ];
-            let zoom_dataset = Dataset::default()
-                .graph_type(GraphType::Line)
-                .style(Style::new().fg(Color::White))
-                .data(&zoom_box);
-            */
             let datasets = if let Some(event_dataset) = event_dataset {
                 vec![trace_dataset, event_dataset]
             } else {
                 vec![trace_dataset]
             };
-            //, zoom_dataset
             
             let chart = Chart::new(datasets).x_axis(properties.x_axis.clone()).y_axis(properties.y_axis.clone());
 

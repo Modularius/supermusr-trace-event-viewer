@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::{tui::{ComponentStyle, FocusableComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{tui::{ComponentStyle, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
 
 pub(crate) struct TextBox<D> {
     parent_has_focus: bool,

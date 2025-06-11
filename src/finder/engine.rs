@@ -1,13 +1,10 @@
 use rdkafka::consumer::BaseConsumer;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::{info, error, instrument};
+use tracing::{error, instrument};
 
 use crate::{
-    finder::{searcher::Searcher, task::SearchTask, MessageFinder, SearchStatus, SearchTarget},
-    messages::{
-        Cache, EventListMessage, FBMessage,
-        TraceMessage,
-    },
+    finder::{task::SearchTask, MessageFinder, SearchStatus, SearchTarget},
+    messages::Cache,
     Select, Topics,
 };
 

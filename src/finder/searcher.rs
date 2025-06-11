@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use rdkafka::{
-    consumer::{BaseConsumer, Consumer}, util::Timeout, Message, TopicPartitionList
+    consumer::{BaseConsumer, Consumer}, util::Timeout, TopicPartitionList
 };
 use tokio::sync::mpsc;
-use tracing::{info, instrument};
+use tracing::instrument;
 
 use crate::{finder::SearchStatus, messages::FBMessage, Timestamp};
 

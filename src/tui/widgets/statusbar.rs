@@ -10,7 +10,7 @@ use tracing::info;
 use crate::{
     finder::SearchStatus,
     messages::Cache,
-    tui::{ComponentStyle, FocusableComponent, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder},
+    tui::{ComponentStyle, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder},
     Component,
     Select
 };

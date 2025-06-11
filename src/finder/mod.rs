@@ -2,9 +2,7 @@ mod engine;
 mod searcher;
 mod task;
 
-use strum::Display;
 use supermusr_common::{Channel, DigitizerId};
-use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     messages::{Cache, EventListMessage, FBMessage, TraceMessage},

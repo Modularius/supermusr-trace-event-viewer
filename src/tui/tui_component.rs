@@ -1,16 +1,14 @@
-use std::{io::Stdout, ops::{Deref, DerefMut}, rc::Rc};
+use std::ops::{Deref, DerefMut};
 
 use crossterm::event::KeyEvent;
 use ratatui::{
     layout::Rect,
-    prelude::CrosstermBackend,
-    style::{Color, Style, Styled},
     widgets::{Block, Borders},
     Frame,
 };
 
 use crate::tui::{
-    builder::TuiComponentBuilder, style::ComponentStyle, BlockExt, Component, ComponentContainer, FocusableComponent, InputComponent, ParentalFocusComponent
+    builder::TuiComponentBuilder, BlockExt, Component, ComponentContainer, FocusableComponent, InputComponent, ParentalFocusComponent
 };
 
 pub(crate) struct TuiComponent<C: Component + Sized> {

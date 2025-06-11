@@ -20,8 +20,8 @@ use rdkafka::{
 };
 use std::{fs::File, net::SocketAddr};
 use supermusr_common::{
-    init_tracer,
-    tracer::{TracerEngine, TracerOptions},
+    //init_tracer,
+    //tracer::{TracerEngine, TracerOptions},
     CommonKafkaOpts,
 };
 use tokio::{

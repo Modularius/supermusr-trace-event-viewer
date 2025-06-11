@@ -13,7 +13,7 @@ use ratatui::{
 pub(crate) use builder::TuiComponentBuilder;
 pub(crate) use style::ComponentStyle;
 pub(crate) use tui_component::TuiComponent;
-pub(crate) use widgets::{TextBox, ListBox, Graph, Channels, Statusbar, EditBox};
+pub(crate) use widgets::{TextBox, ListBox, Graph, GraphProperties, Channels, Statusbar, EditBox};
 
 pub(crate) trait Component {
     fn render(&self, frame: &mut Frame, area: Rect);
