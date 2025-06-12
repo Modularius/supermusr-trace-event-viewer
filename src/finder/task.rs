@@ -1,14 +1,13 @@
+use chrono::Utc;
 use rdkafka::consumer::BaseConsumer;
 use tokio::sync::mpsc;
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::{
-    finder::{searcher::Searcher, SearchStatus, SearchTarget},
-    messages::{
+    cli_structs::Steps, finder::{searcher::Searcher, MessageFinder, SearchResults, SearchStatus, SearchTarget}, messages::{
         Cache, EventListMessage, FBMessage,
         TraceMessage,
-    },
-    Select, Topics,
+    }, Select, Topics
 };
 
 pub(crate) struct SearchTask<'a> {
@@ -30,18 +29,87 @@ impl<'a> SearchTask<'a> {
 
     #[instrument(skip_all)]
     pub(crate) async fn emit_status(&self, new_status: SearchStatus) {
-        //let mut status = self.status.lock().expect("Status");
-        //status.replace(new_status);
         if let Err(e) = self.send_status.send(new_status).await {
-            panic!("{e}");
+            error!("{e}");
         }
     }
 
     #[instrument(skip_all)]
-    pub(crate) async fn search(
+    async fn search_topic_by_timestamp<M, E, A>(
+        &self,
+        searcher: Searcher<'a, M>,
+        steps: &Steps,
+        target: &SearchTarget,
+        emit: E,
+        acquire_while: A
+    ) -> (Vec<M>, i64) where E: Fn(u32)->SearchStatus, M : FBMessage<'a>, A: Fn(&M) -> bool {
+        self.emit_status(emit(0)).await;
+
+        let mut iter = searcher.iter_backstep();
+        for step in 0..steps.num_step_passes {
+            self.emit_status(emit(step)).await;
+            let sz = steps.min_step_size * steps.step_mul_coef.pow(steps.num_step_passes - 1 - step);
+            iter.step_size(sz)
+                .backstep_until_time(|t| t > target.timestamp).await;
+        }
+
+        self.emit_status(emit(steps.num_step_passes)).await;
+
+        let searcher = iter.collect();
+        let offset = searcher.get_offset();
+
+        let results : Vec<M> = searcher
+            .iter_forward()
+            .move_until(|t| t >= target.timestamp).await
+            .acquire_while(acquire_while, target.number).await
+            .collect()
+            .into();
+
+        (results, offset)
+    }
+
+    #[instrument(skip_all)]
+    pub(crate) async fn search_by_timestamp(
         self,
         target: SearchTarget,
-    ) -> (BaseConsumer, Cache) {
+    ) -> (BaseConsumer, SearchResults) {
+        let start = Utc::now();
+        
+        let mut cache = Cache::default();
+
+        let send_status = self.send_status;
+
+        // Find Digitiser Traces
+        let searcher = Searcher::new(&self.consumer, &self.topics.trace_topic, 1, send_status.clone());
+        let (trace_results, offset) = self.search_topic_by_timestamp(searcher, &self.select.step, &target, SearchStatus::TraceSearchInProgress, |msg| target.filter_trace_by_channel_and_digtiser_id(msg)).await;
+        self.emit_status(SearchStatus::TraceSearchFinished).await;
+
+        // Find Digitiser Event Lists
+        let searcher = Searcher::new(&self.consumer, &self.topics.digitiser_event_topic, offset, send_status.clone());
+        let (eventlist_results, _) = self.search_topic_by_timestamp(searcher, &self.select.step, &target, SearchStatus::EventListSearchInProgress, |msg| target.filter_eventlist_digtiser_id(msg)).await;
+        self.emit_status(SearchStatus::EventListSearchFinished).await;
+        
+        for trace in trace_results.iter() {
+            cache.push_trace(&trace.get_unpacked_message().expect(""));
+        }
+
+        for eventlist in eventlist_results.iter() {
+            cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
+        }
+
+        // Send cache via status
+        self.emit_status(SearchStatus::Successful).await;
+        let time = Utc::now() - start;
+        (self.consumer, SearchResults{ cache, time })
+    }
+/*
+    #[instrument(skip_all)]
+    pub(crate) async fn search_by_timestamp__(
+        self,
+        target: SearchTarget,
+    ) -> (BaseConsumer, SearchResults) {
+        let start = Utc::now();
+        
         let steps = &self.select.step;
         let mut cache = Cache::default();
 
@@ -61,8 +129,10 @@ impl<'a> SearchTask<'a> {
 
         self.emit_status(SearchStatus::TraceSearchInProgress(steps.num_step_passes)).await;
 
-        let results: Vec<TraceMessage> = iter
-            .collect()
+        let searcher = iter.collect();
+        let offset = searcher.get_offset();
+
+        let results: Vec<TraceMessage> = searcher
             .iter_forward()
             .move_until(|t| t >= target.timestamp).await
             .acquire_while(|msg| target.filter_trace_by_channel_and_digtiser_id(msg), target.number).await
@@ -78,7 +148,7 @@ impl<'a> SearchTask<'a> {
         // Find Digitiser Event Lists
         self.emit_status(SearchStatus::EventListSearchInProgress(0)).await;
 
-        let searcher = Searcher::new(&self.consumer, &self.topics.digitiser_event_topic, 1, send_status.clone());
+        let searcher = Searcher::new(&self.consumer, &self.topics.digitiser_event_topic, offset, send_status.clone());
         let mut iter = searcher.iter_backstep();
         for step in 0..steps.num_step_passes {
             self.emit_status(SearchStatus::EventListSearchInProgress(step)).await;
@@ -105,7 +175,53 @@ impl<'a> SearchTask<'a> {
 
         // Send cache via status
         self.emit_status(SearchStatus::Successful).await;
+        let time = Utc::now() - start;
+        (self.consumer, SearchResults{ cache, time })
+    }
+ */
+    
+    #[instrument(skip_all)]
+    pub(crate) async fn search_from_end(
+        self,
+        target: SearchTarget,
+    ) -> (BaseConsumer, SearchResults) {
+        let start = Utc::now();
+        
+        let mut cache = Cache::default();
 
-        (self.consumer, cache)
+        let send_status = self.send_status;
+
+        // Find Digitiser Traces
+        self.emit_status(SearchStatus::TraceSearchInProgress(0)).await;
+
+        let searcher = Searcher::new(&self.consumer, &self.topics.trace_topic, target.number as i64 + 1, send_status.clone());
+
+        let trace_results: Vec<TraceMessage> = searcher.iter_forward()
+            .acquire_while(|_|true, target.number).await
+            .collect()
+            .into();
+
+        // Find Digitiser Event Lists
+        self.emit_status(SearchStatus::EventListSearchInProgress(0)).await;
+
+        let searcher = Searcher::new(&self.consumer, &self.topics.digitiser_event_topic, 2*target.number as i64 + 1, send_status.clone());
+
+        let eventlist_results: Vec<EventListMessage> = searcher.iter_forward()
+            .acquire_while(|_|true, 2*target.number).await
+            .collect()
+            .into();
+
+        for trace in trace_results.iter() {
+            cache.push_trace(&trace.get_unpacked_message().expect(""));
+        }
+
+        for eventlist in eventlist_results.iter() {
+            cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
+        }
+
+        // Send cache via status
+        self.emit_status(SearchStatus::Successful).await;
+        let time = Utc::now() - start;
+        (self.consumer, SearchResults{ cache, time })
     }
 }

@@ -55,17 +55,19 @@ impl<D> DerefMut for TuiComponent<D> where D: Component {
     }
 }
 
-trait FocusedComponentCycler {
-    type Focus;
-}
-
 impl<C: ComponentContainer> ComponentContainer for TuiComponent<C> {
-    /*fn focused_component(&self) -> &dyn FocusableComponent {
-        self.comp.focused_component()
-    }*/
+    type Focus = C::Focus;
 
-    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
-        self.comp.focused_component_mut()
+    fn get_focused_component_mut(&mut self, focus: Self::Focus) -> &mut dyn FocusableComponent {
+        self.comp.get_focused_component_mut(focus)
+    }
+    
+    fn get_focus(&self) -> Self::Focus {
+        self.comp.get_focus()
+    }
+    
+    fn set_focus(&mut self, focus: Self::Focus) {
+        self.comp.set_focus(focus);
     }
 }
 

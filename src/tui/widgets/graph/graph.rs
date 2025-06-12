@@ -7,85 +7,19 @@ use ratatui::{
     Frame
 };
 
-use crate::{messages::{EventList, Trace}, tui::{ComponentStyle, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
-
-fn min_max<'a, D: Default + Ord + Into<f64>, I : Iterator<Item = D> + Clone>(buffer: f64, data: I) -> Bound {
-    let min: f64 = data.clone().min().unwrap_or_default().into();
-    let max: f64 = buffer*(data.max().unwrap_or_default().into());
-    Bound { min, max }
-}
+use crate::{graphics::{Bounds, Bound, Point}, messages::{EventList, Trace}, tui::{ComponentStyle, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
 
 const SHIFT_COEF : f64 = 0.1;
 
-#[derive(Default, Clone)]
-struct Pair<D: Default> {
-    time: D,
-    intensity: D,
-}
-
-#[derive(Default, Clone)]
-struct Bound {
-    min: f64,
-    max: f64,
-}
-
-impl Bound {
-    fn mid_point(&self) -> f64 {
-        (self.max + self.min)/2.0
-    }
-    
-    fn range(&self) -> f64 {
-        self.max - self.min
-    }
-
-    fn transform(&self, zoom_factor: f64, delta: f64) -> Self {
-        Self {
-            min: (self.min - delta)/zoom_factor + delta,
-            max: (self.max - delta)/zoom_factor + delta
-        }
-    }
-    
-    fn make_axis<'a>(&self, title: &'static str, num_labels: i32) -> Axis<'static> {
-        let labels: Vec<_> = (0..num_labels)
-            .map(|i|self.range()*i as f64/num_labels as f64 + self.min)
-            .map(|v|Span::raw(v.to_string()))
-            .collect();
-        Axis::default()
-            .title(title)
-            .bounds([self.min, self.max])
-            .labels(labels)
-    }
-}
-
-
-type Bounds = Pair<Bound>;
-
-impl Bounds {
-    fn mid_point(&self) -> Point {
-        Point {
-            time: self.time.mid_point(),
-            intensity: self.intensity.mid_point(),
-        }
-    }
-
-    fn transform(&mut self, source: &Bounds, zoom_factor: f64, delta: &Point) -> Self {
-        Self{
-            time: source.time.transform(zoom_factor, delta.time),
-            intensity: source.intensity.transform(zoom_factor, delta.intensity)
-        }
-    }
-
-    fn is_in(&self, point: Point) -> bool {
-        self.time.min <= point.time && point.time <= self.time.max && self.intensity.min <= point.intensity && point.intensity <= self.intensity.max
-    }
-}
-
-type Point = Pair<f64>;
-
-impl Into<(f64,f64)> for Point {
-    fn into(self) -> (f64,f64) {
-        (self.time, self.intensity)
-    }
+fn make_axis<'a>(bound: &Bound, title: &'static str, num_labels: i32) -> Axis<'static> {
+    let labels: Vec<_> = (0..num_labels)
+        .map(|i|bound.range()*i as f64/num_labels as f64 + bound.min)
+        .map(|v|Span::raw(format!("{v:.3}")))
+        .collect();
+    Axis::default()
+        .title(title)
+        .bounds([bound.min, bound.max])
+        .labels(labels)
 }
 
 pub(crate) struct GraphProperties {
@@ -102,8 +36,8 @@ impl GraphProperties {
         let zoomed_bounds = bounds.clone();
         let view_port = bounds.mid_point();
         
-        let x_axis = bounds.time.make_axis("Time", 5);
-        let y_axis = bounds.intensity.make_axis("Intensity", 5);
+        let x_axis = make_axis(&bounds.time, "Time", 5);
+        let y_axis = make_axis(&bounds.intensity, "Intensity", 5);
         Self {
             bounds,
             zoomed_bounds,
@@ -115,16 +49,17 @@ impl GraphProperties {
     }
 
     fn calc_axes(&mut self) {
-        self.zoomed_bounds.transform(&self.bounds, self.zoom_factor, &self.view_port);
+        self.zoomed_bounds = self.bounds.transform(self.zoom_factor, &self.view_port);
+        //info!("{}, {}, {}", self.zoom_factor, self.view_port.time, self.view_port.intensity);
 
-        self.x_axis = self.zoomed_bounds.time.make_axis("Time", 5);
-        self.y_axis = self.zoomed_bounds.intensity.make_axis("Intensity", 5);
+        self.x_axis = make_axis(&self.zoomed_bounds.time, "Time", 10);
+        self.y_axis = make_axis(&self.zoomed_bounds.intensity, "Intensity", 5);
     }
 
     pub(crate) fn zoom_in(&mut self) {
         self.zoom_factor *= 1.1;
-        if self.zoom_factor > 4.0 {
-            self.zoom_factor = 4.0;
+        if self.zoom_factor > 64.0 {
+            self.zoom_factor = 64.0;
         }
         self.calc_axes();
     }
@@ -195,14 +130,15 @@ impl Graph where {
                 .copied()
             )
             .collect();
+
         let event_data : Option<Vec<_>> = event_data
             .map(|events|events.iter().map(|e|(e.time,e.intensity)).collect());
 
         let time = trace_data.iter().map(|e|e.0 as u32);
-        let time_bounds = min_max(1.0625, time.clone());
+        let time_bounds = Bound::from(1.0625, time.clone());
         
         let values = trace_data.iter().map(|e|e.1);
-        let intensity_bounds = min_max(1.125, values.clone());
+        let intensity_bounds = Bound::from(1.125, values.clone());
         
         let properties = GraphProperties::new(Bounds { time: time_bounds, intensity: intensity_bounds});
 
@@ -233,6 +169,7 @@ impl Graph where {
 impl Component for Graph {
     fn render(&self, frame: &mut Frame, area: Rect) {
         if let Some(properties) = &self.properties {
+            // Infobar/Graph division  
             let (_info, graph) = {
                 let chunk = Layout::default()
                     .direction(Direction::Vertical)
@@ -241,23 +178,25 @@ impl Component for Graph {
                 (chunk[0], chunk[1])
             };
             
+            // Graph/Hscroll division
             let (graph, hscroll) = {
                 let chunk1 = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(1)])
+                    .constraints([Constraint::Min(0), Constraint::Length(2)])
                     .split(graph);
                 
                 let chunk2 = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Min(0), Constraint::Length(1)])
+                    .constraints([Constraint::Min(0), Constraint::Length(2)])
                     .split(chunk1[1]);
                 (chunk1[0], chunk2[1])
             };
             
+            //  Graph/Vscroll division
             let (graph, vscroll) = {
                 let chunk = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Min(0), Constraint::Length(1)])
+                    .constraints([Constraint::Min(0), Constraint::Length(2)])
                     .split(graph);
                 (chunk[0], chunk[1])
             };

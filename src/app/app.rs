@@ -3,29 +3,36 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     Frame,
 };
-use strum::{EnumIter, IntoEnumIterator};
+use strum::{EnumCount, EnumIter};
 
 use crate::{
     app::{Display, Results, Setup},
     finder::MessageFinder,
+    graphics::GraphSaver,
     messages::Cache,
     tui::{Component, ComponentContainer, FocusableComponent, InputComponent, Statusbar, TextBox, TuiComponent},
     Select
 };
 
-#[derive(Default, Debug, Clone, EnumIter)]
-enum Focus {
+pub(crate) trait AppDependencies {
+    type MessageFinder: MessageFinder;
+    type GraphSaver: GraphSaver;
+}
+
+#[derive(Default, Debug, Clone, EnumIter, EnumCount)]
+pub(crate) enum Focus {
     #[default]
     Setup,
     Results,
     Display,
 }
 
-pub(crate) struct App<M> {
+pub(crate) struct App<D : AppDependencies> {
     cache: Option<Cache>,
     quit: bool,
     is_changed: bool,
-    message_finder: M,
+    message_finder: D::MessageFinder,
+    graph_saver: D::GraphSaver,
     focus: Focus,
     setup: TuiComponent<Setup>,
     status: TuiComponent<Statusbar>,
@@ -34,13 +41,14 @@ pub(crate) struct App<M> {
     help: TuiComponent<TextBox<String>>,
 }
 
-impl<'a, M: MessageFinder> App<M> {
-    pub(crate) fn new(message_finder: M, select: &Select) -> Self {
+impl<'a, D: AppDependencies> App<D> {
+    pub(crate) fn new(message_finder: D::MessageFinder, select: &Select) -> Self {
         let mut app = App {
             quit: false,
             is_changed: true,
             cache: None,
             message_finder,
+            graph_saver: Default::default(),
             focus: Default::default(),
             setup: Setup::new(select),
             status: Statusbar::new(select),
@@ -65,7 +73,7 @@ impl<'a, M: MessageFinder> App<M> {
     /// This function is called asynchronously,
     /// hence it cannot be part of [Self::update].
     pub(crate) async fn async_update(&mut self) {
-        self.message_finder.run().await;
+        self.message_finder.update().await;
     }
 
     /// Causes the function to pop any status messages or results from the [MessageFinder],
@@ -77,12 +85,12 @@ impl<'a, M: MessageFinder> App<M> {
             self.is_changed = true;
         }
         // If a result is available, pop it from the [MessageFinder].
-        if let Some(cache) = self.message_finder.cache() {
-            self.results.new_cache(&cache);
+        if let Some(cache) = self.message_finder.results() {
+            self.results.new_cache(&cache.cache);
             self.status.set_info(&cache);
 
             // Take ownership of the cache
-            self.cache = Some(cache);
+            self.cache = Some(cache.cache);
 
             self.is_changed = true;
         }
@@ -94,22 +102,32 @@ impl<'a, M: MessageFinder> App<M> {
     }
 }
 
-impl<M: MessageFinder> ComponentContainer for App<M> {
-    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
-        match self.focus {
+impl<D: AppDependencies> ComponentContainer for App<D> {
+    type Focus = Focus;
+    
+    fn get_focused_component_mut(&mut self, focus: Self::Focus) -> &mut dyn FocusableComponent {
+        match focus {
             Focus::Setup => &mut self.setup,
             Focus::Results => &mut self.results,
             Focus::Display => &mut self.display,
         }
     }
+    
+    fn get_focus(&self) -> Self::Focus {
+        self.focus.clone()
+    }
+    
+    fn set_focus(&mut self, focus: Self::Focus) {
+        self.focus = focus;
+    }
 }
 
-impl<M: MessageFinder> Component for App<M> {
+impl<D: AppDependencies> Component for App<D> {
     fn render(&self, frame: &mut Frame, area: Rect) {
         let (setup, status, results_display, help) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(6), Constraint::Length(5), Constraint::Min(8), Constraint::Length(3)])
+                .constraints([Constraint::Length(8), Constraint::Length(5), Constraint::Min(8), Constraint::Length(3)])
                 .split(area);
             (chunk[0], chunk[1], chunk[2], chunk[3])
         };
@@ -131,21 +149,15 @@ impl<M: MessageFinder> Component for App<M> {
     }
 }
 
-impl<M: MessageFinder> InputComponent for App<M> {
+impl<D: AppDependencies> InputComponent for App<D> {
     fn handle_key_press(&mut self, key: KeyEvent) {
-        if key == KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE) {
+        if key.code == KeyCode::Esc {
             self.quit = true;
+        } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT) {
+            self.set_focus_index(self.focus.clone() as isize - 1);
         } else if key == KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE) {
-            self.focused_component_mut().set_focus(false);
-
-            self.focus = Focus::iter()
-                .cycle()
-                .skip(self.focus.clone() as usize + 1)
-                .next()
-                .expect("");
-
-            self.focused_component_mut().set_focus(true);
-        } else if key == KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE) {
+            self.set_focus_index(self.focus.clone() as isize + 1)
+        } else if key.code == KeyCode::Enter {
             match self.focus {
                 Focus::Setup => {
                     self.setup
@@ -167,6 +179,17 @@ impl<M: MessageFinder> InputComponent for App<M> {
                     }
                 }
                 Focus::Display => {
+                }
+            }
+        } else if key == KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL) {
+            if let Some(cache) = &self.cache {
+                if let Some((_, trace, channel)) = self.results.select(cache) {
+                    D::GraphSaver::save_as_svg(trace, vec![channel], self.setup.get_path());
+                    //let graph = BuildGraph::<BackendSVG<'_>>::new(800,600,bounds.time_range(), bounds.intensity_range());
+
+                    //let path_buf = graph.build_path(&output_to_file.path, metadata, *channel).expect("extension should write");
+                    //let eventlist = traces.events.as_ref().and_then(|ev|ev.get(channel));
+                    //graph.save_trace_graph(&path_buf, &trace, eventlist).expect("");
                 }
             }
         } else {

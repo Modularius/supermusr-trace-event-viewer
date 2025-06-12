@@ -1,6 +1,7 @@
 //!
 //!
 mod app;
+mod graphics;
 mod cli_structs;
 mod finder;
 mod messages;
@@ -31,15 +32,10 @@ use tokio::{
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt};
 
 use crate::{
-    app::App,
-    cli_structs::{Select, Topics, UserBounds},
-    finder::SearchEngine,
-    tui::{Component, InputComponent},
+    app::{App, AppDependencies}, cli_structs::{Select, Topics, UserBounds}, finder::{MessageFinder, SearchEngine}, graphics::{GraphSaver, SvgSaver}, tui::{Component, InputComponent}
 };
 
 type Timestamp = DateTime<Utc>;
-
-//use crate::{finder::finder_task, tui::{App, Component}};
 
 /// [clap] derived stuct to parse command line arguments.
 #[derive(Parser)]
@@ -106,6 +102,13 @@ pub fn create_default_consumer(
     Ok(consumer)
 }
 
+struct TheAppDependencies;
+
+impl AppDependencies for TheAppDependencies {
+    type MessageFinder = SearchEngine;
+    type GraphSaver = SvgSaver;
+}
+
 /// Entry point.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -116,8 +119,10 @@ async fn main() -> anyhow::Result<()> {
         args.otel_namespace.clone()
     ));*/
 
-    let file = File::create("tracing.log").expect("");
-    let stdout_tracer = tracing_subscriber::fmt::layer().with_writer(file).with_ansi(false);
+    let file = File::create("out/tracing.log").expect("");
+    let stdout_tracer = tracing_subscriber::fmt::layer()
+        .with_writer(file)
+        .with_ansi(false);
 
     // This filter is applied to the stdout tracer
     let log_filter = EnvFilter::from_default_env();
@@ -146,13 +151,13 @@ async fn main() -> anyhow::Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let search_engine = SearchEngine::new(consumer, &args.select, &args.topics);
-    let mut app = App::new(search_engine, &args.select);
+    let mut app = App::<TheAppDependencies>::new(search_engine, &args.select);
 
     let mut sigint = signal(SignalKind::interrupt())?;
 
     let mut app_update = tokio::time::interval(time::Duration::from_millis(100));
 
-    let mut search_engine_update = tokio::time::interval(time::Duration::from_millis(100));
+    let mut search_engine_update = tokio::time::interval(time::Duration::from_nanos(1));
 
     terminal.draw(|frame|app.render(frame, frame.area()))?;
 

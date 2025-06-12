@@ -2,6 +2,8 @@ mod engine;
 mod searcher;
 mod task;
 
+use chrono::Duration;
+use strum::{Display, EnumIter, EnumString};
 use supermusr_common::{Channel, DigitizerId};
 
 use crate::{
@@ -10,6 +12,13 @@ use crate::{
 };
 
 pub(crate) use engine::SearchEngine;
+
+#[derive(Clone, EnumString, Display, EnumIter)]
+pub(crate) enum SearchMode {
+    FromEnd,
+    ByChannels,
+    ByDigitiserIds
+}
 
 #[derive(Default)]
 pub(crate) enum SearchStatus {
@@ -23,6 +32,29 @@ pub(crate) enum SearchStatus {
     Halted,
     Successful,
 }
+
+#[derive(Default)]
+pub(crate) struct SearchResults {
+    pub(crate) time: Duration,
+    pub(crate) cache: Cache,
+}
+
+/*#[derive(Clone)]
+pub(crate) enum SearchTarget {
+    ByChannel {
+        timestamp: Timestamp,
+        channels: Vec<Channel>,
+        number: usize,
+    },
+    ByDigitiser {
+        timestamp: Timestamp,
+        digitiser_ids: Vec<DigitizerId>,
+        number: usize,
+    },
+    FromEnd {
+        number: usize,
+    }
+}*/
 
 #[derive(Default, Clone)]
 pub(crate) struct SearchTarget {
@@ -50,11 +82,13 @@ impl SearchTarget {
 }
 
 pub(crate) trait MessageFinder {
+    type SearchMode;
+
     fn init_search(&mut self, target: SearchTarget) -> bool;
     
     fn status(&mut self) -> Option<SearchStatus>;
     
-    fn cache(&mut self) -> Option<Cache>;
+    fn results(&mut self) -> Option<SearchResults>;
 
-    async fn run(&mut self);
+    async fn update(&mut self);
 }

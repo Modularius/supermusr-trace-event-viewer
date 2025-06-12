@@ -12,7 +12,6 @@ pub(crate) struct Searcher<'a, M> {
     consumer: &'a BaseConsumer,
     topic: String,
     offset: i64,
-    tpl: TopicPartitionList,
     send_status: mpsc::Sender<SearchStatus>,
     results: Vec<M>,
 }
@@ -25,13 +24,13 @@ impl<'a, M> Searcher<'a, M> {
         offset: i64,
         send_status: mpsc::Sender<SearchStatus>,
     ) -> Self {
-        let mut tpl = TopicPartitionList::new();
-        tpl.add_partition(topic, 0);
+        let mut tpl = TopicPartitionList::with_capacity(1);
+        tpl.add_partition_offset(topic, 0, rdkafka::Offset::End).expect("");
+        consumer.assign(&tpl).expect("");
         Self {
             consumer,
             offset,
             topic: topic.to_owned(),
-            tpl,
             send_status,
             results: Default::default(),
         }
@@ -39,8 +38,6 @@ impl<'a, M> Searcher<'a, M> {
 
     #[instrument(skip_all)]
     pub(crate) async fn emit_status(send_status: &mpsc::Sender<SearchStatus>, new_status: SearchStatus) {
-        //let mut status = self.status.lock().expect("Status");
-        //status.replace(new_status);
         send_status.send(new_status).await.expect("");
     }
 
@@ -63,6 +60,10 @@ impl<'a, M> Searcher<'a, M> {
     fn set_offset(&mut self, offset: i64) {
         self.offset = offset;
     }
+
+    pub(crate) fn get_offset(&self) -> i64 {
+        self.offset
+    }
 }
 
 impl<'a, M> Into<Vec<M>> for Searcher<'a, M> {
@@ -78,11 +79,7 @@ where
 {
     #[instrument(skip_all)]
     async fn message(&mut self, offset: i64) -> Option<M> {
-        self.tpl
-            .set_partition_offset(self.topic.as_str(), 0, rdkafka::Offset::OffsetTail(offset))
-            .expect("");
-
-        self.consumer.assign(&self.tpl).expect("");
+        self.consumer.seek(&self.topic, 0, rdkafka::Offset::OffsetTail(offset), Duration::from_millis(1)).expect("");
         let msg : Option<M> = self.consumer
             .iter()
             .next()
@@ -125,14 +122,13 @@ where
                 None => return self
             }
         };
-        self.inner.message(offset).await.expect("").timestamp();
-        //info!("{offset} Earliest {earliest}");
+        //self.inner.message(offset).await.expect("").timestamp();
+        
         while f(earliest) {
-            let new_offset = offset + self.step_size.expect("");
+            let new_offset = offset + self.step_size.expect("Size step should have been set. This should never fail.");
             match self.inner.message(new_offset).await {
                 Some(message) => { 
                     let new_timestamp = message.timestamp();
-                    //info!("New {new_timestamp}");
                     if f(new_timestamp) {
                         offset = new_offset;
                         earliest = new_timestamp;

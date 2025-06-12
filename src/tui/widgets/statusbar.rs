@@ -8,7 +8,7 @@ use strum::{Display, EnumString};
 use tracing::info;
 
 use crate::{
-    finder::SearchStatus,
+    finder::{SearchResults, SearchStatus},
     messages::Cache,
     tui::{ComponentStyle, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder},
     Component,
@@ -90,8 +90,8 @@ impl Statusbar {
         info!("{0}",self.progress_steps);
     }
 
-    pub(crate) fn set_info(&mut self, cache: &Cache) {
-        self.info.set(format!("Number of traces/events: {}/{}", cache.iter_traces().len(), cache.iter_events().len()));
+    pub(crate) fn set_info(&mut self, results: &SearchResults) {
+        self.info.set(format!("Found {} traces, in {},{} ms", results.cache.iter_traces().len(), results.time.num_seconds(), results.time.subsec_millis()));
     }
 }
 

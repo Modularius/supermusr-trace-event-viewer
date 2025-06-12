@@ -7,4 +7,4 @@ use results::Results;
 use setup::Setup;
 use display::Display;
 
-pub(crate) use app::App;
+pub(crate) use app::{App, AppDependencies};

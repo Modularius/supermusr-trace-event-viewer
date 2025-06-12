@@ -16,7 +16,7 @@ pub(crate) struct ListBox<D> {
 }
 
 impl<D> ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std::fmt::Debug {
-    pub(crate) fn new(data: &[D], name: Option<&'static str>) -> TuiComponent<Self> {
+    pub(crate) fn new(data: &[D], name: Option<&'static str>, index: Option<usize>) -> TuiComponent<Self> {
         let builder = TuiComponentBuilder::new(ComponentStyle::selectable())
             .is_in_block(true);
 
@@ -28,7 +28,7 @@ impl<D> ListBox<D> where D: Clone + ToString + FromStr, <D as FromStr>::Err: std
             data: data.to_vec(),
             has_focus: false,
             parent_has_focus: false,
-            state: ListState::default(),
+            state: ListState::default().with_selected(index),
             has_state_changed: true,
         })
     }

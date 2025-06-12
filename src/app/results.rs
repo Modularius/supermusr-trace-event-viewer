@@ -16,7 +16,7 @@ pub(crate) struct Results {
 impl Results {
     pub(crate) fn new() -> TuiComponent<Self> {
         TuiComponentBuilder::new(ComponentStyle::selectable()).build(Self {
-            list: ListBox::new(&vec![], Some("Traces")),
+            list: ListBox::new(&vec![], Some("Traces"), None),
             channels: Channels::new(),
         })
     }

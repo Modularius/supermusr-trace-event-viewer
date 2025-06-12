@@ -1,10 +1,10 @@
+use chrono::Duration;
 use rdkafka::consumer::BaseConsumer;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{error, instrument};
 
 use crate::{
-    finder::{task::SearchTask, MessageFinder, SearchStatus, SearchTarget},
-    messages::Cache,
+    finder::{task::SearchTask, MessageFinder, SearchMode, SearchResults, SearchStatus, SearchTarget},
     Select, Topics,
 };
 
@@ -19,12 +19,11 @@ pub(crate) struct SearchEngine {
     /// When another instance of [Self] is finished with the [BaseConsumer] object,
     /// it is passed back via this channel.
     send_init: mpsc::Sender<(BaseConsumer, SearchTarget)>,
-    recv_halt: mpsc::Receiver<BaseConsumer>,
-    recv_results: mpsc::Receiver<(BaseConsumer, Cache)>,
+    recv_results: mpsc::Receiver<(BaseConsumer, SearchResults)>,
     recv_status: mpsc::Receiver<SearchStatus>,
     status: Option<SearchStatus>,
-    cache: Option<Cache>,
     // 
+    results: Option<SearchResults>,
     //select: Select,
     //topics: Topics,
     /// When a search is in progress
@@ -38,25 +37,23 @@ impl SearchEngine {
 
         let (send_init, mut recv_init) = mpsc::channel(1);
         let (send_results, recv_results) = mpsc::channel(1);
-        let (send_halt, recv_halt) = mpsc::channel(1);
         let (send_status, recv_status) = mpsc::channel(1);
         Self {
             consumer: Some(consumer),
             send_init,
-            recv_halt,
             recv_results,
             recv_status,
             target: None,
             status: None,
-            cache: None,
+            results: None,
             handle: tokio::spawn(async move {
                 loop {
                     let (consumer, target) = recv_init.recv().await.expect("");
                     
                     let task = SearchTask::new(consumer, &send_status, &select, &topics);
-                    let (consumer, cache) = task.search(target).await;
+                    let (consumer, results) = task.search_by_timestamp(target).await;
                     
-                    send_results.send((consumer, cache)).await.expect("");
+                    send_results.send((consumer, results)).await.expect("");
                 }
             }),
         }
@@ -71,6 +68,7 @@ impl Drop for SearchEngine {
 }
 
 impl MessageFinder for SearchEngine {
+    type SearchMode = SearchMode;
     #[instrument(skip_all)]
     fn init_search(&mut self, target: SearchTarget) -> bool {
         if self.consumer.is_some() {
@@ -83,11 +81,11 @@ impl MessageFinder for SearchEngine {
         self.status.take()
     }
     
-    fn cache(&mut self) -> Option<Cache> {
-        self.cache.take()
+    fn results(&mut self) -> Option<SearchResults> {
+        self.results.take()
     }
 
-    async fn run(&mut self) {
+    async fn update(&mut self) {
         if let Some(target) = self.target.take() {
             if let Some(consumer) = self.consumer.take() {
                 if let Err(_) = self.send_init.send((consumer, target)).await {
@@ -99,16 +97,18 @@ impl MessageFinder for SearchEngine {
         }
 
         if !self.recv_results.is_empty() {
-            if let Some((consumer, cache)) = self.recv_results.recv().await {
+            if let Some((consumer, results)) = self.recv_results.recv().await {
                 self.consumer = Some(consumer);
-                self.cache = Some(cache);
+                self.results = Some(results);
             }
         }
-        if !self.recv_halt.is_empty() {
+
+        /*if !self.recv_halt.is_empty() {
             if let Some(consumer) = self.recv_halt.recv().await {
                 self.consumer = Some(consumer);
             }
-        }
+        }*/
+
         if !self.recv_status.is_empty() {
             if let Some(status) = self.recv_status.recv().await {
                 self.status = Some(status);

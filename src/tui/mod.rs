@@ -5,24 +5,54 @@ mod tui_component;
 
 use crossterm::event::KeyEvent;
 use ratatui::{
-    layout::Rect,
+    layout::{Alignment, Rect},
     widgets::{Block, BorderType},
     Frame,
 };
+use strum::{EnumCount, IntoEnumIterator};
 
 pub(crate) use builder::TuiComponentBuilder;
+
 pub(crate) use style::ComponentStyle;
 pub(crate) use tui_component::TuiComponent;
 pub(crate) use widgets::{TextBox, ListBox, Graph, GraphProperties, Channels, Statusbar, EditBox};
 
+/// Provides method to render any component in a [Frame]
 pub(crate) trait Component {
+    /// Uses [Frame] to render the component in `area`.
     fn render(&self, frame: &mut Frame, area: Rect);
 }
 
+/// Provides methods for components which contain other components, and have a `Focus` function.
 pub(crate) trait ComponentContainer : Component {
-    //fn focused_component(&self) -> &dyn FocusableComponent;
+    /// The `enum` type which defines the child coponents.
+    type Focus : IntoEnumIterator + EnumCount;
 
-    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent;
+    /// Maps each variant of [Self::Focus] to a type implementing [FocusableComponent].
+    fn get_focused_component_mut(&mut self, focus: Self::Focus) -> &mut dyn FocusableComponent;
+
+    /// Gets the current focus.
+    fn get_focus(&self) -> Self::Focus;
+
+    /// Sets the current focus.
+    fn set_focus(&mut self, focus: Self::Focus);
+    
+    fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
+        let focus = self.get_focus();
+        self.get_focused_component_mut(focus)
+    }
+    
+    /// Sets the focus to the given index (mod the number of children).
+    fn set_focus_index(&mut self, index: isize) {
+        self.focused_component_mut().set_focus(false);
+        self.set_focus(Self::Focus::iter()
+            .cycle()
+            .skip((Self::Focus::COUNT as isize + index) as usize % Self::Focus::COUNT)
+            .next()
+            .expect("")
+        );
+        self.focused_component_mut().set_focus(true);
+    }
 }
 
 
@@ -52,6 +82,7 @@ impl BlockExt for Block<'_> {
         };
         if let Some(name) = name {
             self.title_top(name)
+                .title_alignment(Alignment::Center)
         } else {
             self
         }
