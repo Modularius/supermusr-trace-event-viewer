@@ -7,25 +7,30 @@ use ratatui::{
 use crate::{
     messages::{EventList, Trace},
     tui::{
-        ComponentStyle, FocusableComponent, Graph, GraphProperties, InputComponent,
-        ParentalFocusComponent, TuiComponent, TuiComponentBuilder,
+        ComponentStyle, FocusableComponent, Graph, GraphProperties, InputComponent, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder
     },
     Component,
 };
 
 pub(crate) struct Display {
+    info: TuiComponent<TextBox<String>>,
     graph: TuiComponent<Graph>,
 }
 
 impl Display {
     pub(crate) fn new() -> TuiComponent<Self> {
         TuiComponentBuilder::new(ComponentStyle::selectable()).build(Self {
+            info: TextBox::new(Default::default(), None),
             graph: Graph::new(),
         })
     }
 
     pub(crate) fn select(&mut self, trace_data: &Trace, event_data: Option<&EventList>) {
         self.graph.set(trace_data, event_data)
+    }
+
+    pub(crate) fn set_info(&mut self, info: &str) {
+        self.info.set(info.to_string())
     }
 }
 
@@ -37,7 +42,7 @@ impl ParentalFocusComponent for Display {
 
 impl Component for Display {
     fn render(&self, frame: &mut Frame, area: Rect) {
-        let (status, results) = {
+        let (info, results) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Length(4), Constraint::Min(16)])
@@ -45,7 +50,8 @@ impl Component for Display {
             (chunk[0], chunk[1])
         };
 
-        self.graph.render(frame, area);
+        self.info.render(frame, info);
+        self.graph.render(frame, results);
     }
 }
 
@@ -76,6 +82,9 @@ impl InputComponent for Display {
                 .get_properties_mut()
                 .map(|p| p.move_viewport(1.0, 0.0));
         }
+        self.graph.get_properties_mut().inspect(|properties|
+            self.info.set(format!("{}", properties.get_info()))
+        );
     }
 }
 

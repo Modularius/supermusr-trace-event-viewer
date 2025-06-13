@@ -11,6 +11,7 @@ use ratatui::{
     },
     Frame,
 };
+use strum::IntoEnumIterator;
 
 use crate::{
     tui::{
@@ -57,6 +58,23 @@ where
     pub(crate) fn set(&mut self, data: Vec<D>) {
         self.data = data;
         self.state = ListState::default()
+    }
+    /*
+       pub(crate) fn set_value(&mut self, data: &D) where D : PartialEq {
+           self.state.select(
+               self.data.iter()
+                   .enumerate()
+                   .find_map(|(i,x)| (*x == *data).then_some(i))
+           );
+       }
+    */
+    pub(crate) fn get_value(&self) -> Option<D>
+    where
+        D: IntoEnumIterator + Copy,
+    {
+        self.state
+            .selected()
+            .and_then(|i| self.data.iter().skip(i).next().copied().clone())
     }
 
     pub(crate) fn get_index(&self) -> Option<usize> {

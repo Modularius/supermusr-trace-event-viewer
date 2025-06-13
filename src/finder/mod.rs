@@ -13,8 +13,9 @@ use crate::{
 
 pub(crate) use engine::SearchEngine;
 
-#[derive(Clone, EnumString, Display, EnumIter)]
+#[derive(Default, Clone, EnumString, Display, EnumIter, Copy)]
 pub(crate) enum SearchMode {
+    #[default]
     FromEnd,
     ByChannels,
     ByDigitiserIds,
@@ -58,6 +59,7 @@ pub(crate) enum SearchTarget {
 
 #[derive(Default, Clone)]
 pub(crate) struct SearchTarget {
+    pub(crate) mode: SearchMode,
     pub(crate) timestamp: Timestamp,
     pub(crate) channels: Vec<Channel>,
     pub(crate) digitiser_ids: Vec<DigitizerId>,

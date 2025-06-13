@@ -4,7 +4,6 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect, Spacing},
-    widgets::Tabs,
     Frame,
 };
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
@@ -76,7 +75,7 @@ impl Setup {
         setup
     }
 
-    pub(crate) fn search<M: MessageFinder>(&self, message_finder: &mut M) -> bool {
+    pub(crate) fn search<M: MessageFinder>(&self, message_finder: &mut M) {
         let timestamp = {
             let date = self.date.get();
             let time = self.time.get();
@@ -88,12 +87,15 @@ impl Setup {
         let number = *self.number.get();
         let channel = *self.channel.get();
         let digitiser_id = *self.digitiser_id.get();
-        message_finder.init_search(SearchTarget {
-            timestamp,
-            number,
-            channels: vec![channel],
-            digitiser_ids: vec![digitiser_id],
-        })
+        if let Some(mode) = self.search_mode.get_value() {
+            message_finder.init_search(SearchTarget {
+                mode,
+                timestamp,
+                number,
+                channels: vec![channel],
+                digitiser_ids: vec![digitiser_id],
+            });
+        }
     }
 
     pub(crate) fn get_path(&self) -> PathBuf {

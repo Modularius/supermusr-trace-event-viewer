@@ -53,7 +53,12 @@ impl SearchEngine {
                     let (consumer, target) = recv_init.recv().await.expect("");
 
                     let task = SearchTask::new(consumer, &send_status, &select, &topics);
-                    let (consumer, results) = task.search_by_timestamp(target).await;
+                    let (consumer, results) = match target.mode {
+                        SearchMode::FromEnd => task.search_from_end(target).await,
+                        SearchMode::ByChannels | SearchMode::ByDigitiserIds => {
+                            task.search_by_timestamp(target).await
+                        }
+                    };
 
                     send_results.send((consumer, results)).await.expect("");
                 }

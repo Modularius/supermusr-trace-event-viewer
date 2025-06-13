@@ -82,6 +82,9 @@ impl<'a> SearchTask<'a> {
         (results, offset)
     }
 
+    /// Performs a FromEnd search.
+    /// # Attributes
+    /// - target: what to search for.
     #[instrument(skip_all)]
     pub(crate) async fn search_by_timestamp(
         self,
@@ -144,6 +147,9 @@ impl<'a> SearchTask<'a> {
         (self.consumer, SearchResults { cache, time })
     }
 
+    /// Performs a FromEnd search.
+    /// # Attributes
+    /// - target: what to search for.
     #[instrument(skip_all)]
     pub(crate) async fn search_from_end(
         self,
