@@ -10,8 +10,11 @@ use crate::{
     finder::MessageFinder,
     graphics::GraphSaver,
     messages::Cache,
-    tui::{Component, ComponentContainer, FocusableComponent, InputComponent, Statusbar, TextBox, TuiComponent},
-    Select
+    tui::{
+        Component, ComponentContainer, FocusableComponent, InputComponent, Statusbar, TextBox,
+        TuiComponent,
+    },
+    Select,
 };
 
 pub(crate) trait AppDependencies {
@@ -27,7 +30,7 @@ pub(crate) enum Focus {
     Display,
 }
 
-pub(crate) struct App<D : AppDependencies> {
+pub(crate) struct App<D: AppDependencies> {
     cache: Option<Cache>,
     quit: bool,
     is_changed: bool,
@@ -69,7 +72,7 @@ impl<'a, D: AppDependencies> App<D> {
     }
 
     /// Updates the search engine.
-    /// 
+    ///
     /// This function is called asynchronously,
     /// hence it cannot be part of [Self::update].
     pub(crate) async fn async_update(&mut self) {
@@ -104,7 +107,7 @@ impl<'a, D: AppDependencies> App<D> {
 
 impl<D: AppDependencies> ComponentContainer for App<D> {
     type Focus = Focus;
-    
+
     fn get_focused_component_mut(&mut self, focus: Self::Focus) -> &mut dyn FocusableComponent {
         match focus {
             Focus::Setup => &mut self.setup,
@@ -112,11 +115,11 @@ impl<D: AppDependencies> ComponentContainer for App<D> {
             Focus::Display => &mut self.display,
         }
     }
-    
+
     fn get_focus(&self) -> Self::Focus {
         self.focus.clone()
     }
-    
+
     fn set_focus(&mut self, focus: Self::Focus) {
         self.focus = focus;
     }
@@ -127,12 +130,16 @@ impl<D: AppDependencies> Component for App<D> {
         let (setup, status, results_display, help) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(8), Constraint::Length(5), Constraint::Min(8), Constraint::Length(3)])
+                .constraints([
+                    Constraint::Length(8),
+                    Constraint::Length(5),
+                    Constraint::Min(8),
+                    Constraint::Length(3),
+                ])
                 .split(area);
             (chunk[0], chunk[1], chunk[2], chunk[3])
         };
 
-        
         let (results, graph) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
@@ -160,26 +167,22 @@ impl<D: AppDependencies> InputComponent for App<D> {
         } else if key.code == KeyCode::Enter {
             match self.focus {
                 Focus::Setup => {
-                    self.setup
-                        .search(&mut self.message_finder);
+                    self.setup.search(&mut self.message_finder);
                 }
                 Focus::Results => {
                     if let Some(cache) = &self.cache {
                         if let Some((_, trace, channel)) = self.results.select(cache) {
                             self.display.select(
-                                trace.traces
-                                    .get(&channel)
-                                    .expect(""),
-                                trace.events
+                                trace.traces.get(&channel).expect(""),
+                                trace
+                                    .events
                                     .as_ref()
-                                    .and_then(|events|events.get(&channel)));
-
-                            
+                                    .and_then(|events| events.get(&channel)),
+                            );
                         }
                     }
                 }
-                Focus::Display => {
-                }
+                Focus::Display => {}
             }
         } else if key == KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL) {
             if let Some(cache) = &self.cache {

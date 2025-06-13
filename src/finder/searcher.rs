@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use rdkafka::{
-    consumer::{BaseConsumer, Consumer}, util::Timeout, TopicPartitionList
+    consumer::{BaseConsumer, Consumer},
+    util::Timeout,
+    TopicPartitionList,
 };
 use tokio::sync::mpsc;
 use tracing::instrument;
@@ -25,7 +27,8 @@ impl<'a, M> Searcher<'a, M> {
         send_status: mpsc::Sender<SearchStatus>,
     ) -> Self {
         let mut tpl = TopicPartitionList::with_capacity(1);
-        tpl.add_partition_offset(topic, 0, rdkafka::Offset::End).expect("");
+        tpl.add_partition_offset(topic, 0, rdkafka::Offset::End)
+            .expect("");
         consumer.assign(&tpl).expect("");
         Self {
             consumer,
@@ -37,7 +40,10 @@ impl<'a, M> Searcher<'a, M> {
     }
 
     #[instrument(skip_all)]
-    pub(crate) async fn emit_status(send_status: &mpsc::Sender<SearchStatus>, new_status: SearchStatus) {
+    pub(crate) async fn emit_status(
+        send_status: &mpsc::Sender<SearchStatus>,
+        new_status: SearchStatus,
+    ) {
         send_status.send(new_status).await.expect("");
     }
 
@@ -79,16 +85,31 @@ where
 {
     #[instrument(skip_all)]
     async fn message(&mut self, offset: i64) -> Option<M> {
-        self.consumer.seek(&self.topic, 0, rdkafka::Offset::OffsetTail(offset), Duration::from_millis(1)).expect("");
-        let msg : Option<M> = self.consumer
+        self.consumer
+            .seek(
+                &self.topic,
+                0,
+                rdkafka::Offset::OffsetTail(offset),
+                Duration::from_millis(1),
+            )
+            .expect("");
+        let msg: Option<M> = self
+            .consumer
             .iter()
             .next()
             .and_then(Result::ok)
             .and_then(FBMessage::from_borrowed_message);
         match &msg {
-            Some(msg) => self.send_status.send(SearchStatus::Text(format!("Message at offset {offset}: timestamp: {0}", msg.timestamp()))),
-            None => self.send_status.send(SearchStatus::Text(format!{"Message at offset {offset} failed"})),
-        }.await.expect("");
+            Some(msg) => self.send_status.send(SearchStatus::Text(format!(
+                "Message at offset {offset}: timestamp: {0}",
+                msg.timestamp()
+            ))),
+            None => self.send_status.send(SearchStatus::Text(
+                format! {"Message at offset {offset} failed"},
+            )),
+        }
+        .await
+        .expect("");
         msg
     }
 }
@@ -114,20 +135,26 @@ where
     M: FBMessage<'a>,
 {
     #[instrument(skip_all)]
-    pub(crate) async fn backstep_until_time<F: Fn(Timestamp) -> bool>(&mut self, f: F) -> &mut Self {
+    pub(crate) async fn backstep_until_time<F: Fn(Timestamp) -> bool>(
+        &mut self,
+        f: F,
+    ) -> &mut Self {
         let mut offset = self.inner.offset;
         let mut earliest = {
             match self.inner.message(offset).await {
                 Some(message) => message.timestamp(),
-                None => return self
+                None => return self,
             }
         };
         //self.inner.message(offset).await.expect("").timestamp();
-        
+
         while f(earliest) {
-            let new_offset = offset + self.step_size.expect("Size step should have been set. This should never fail.");
+            let new_offset = offset
+                + self
+                    .step_size
+                    .expect("Size step should have been set. This should never fail.");
             match self.inner.message(new_offset).await {
-                Some(message) => { 
+                Some(message) => {
                     let new_timestamp = message.timestamp();
                     if f(new_timestamp) {
                         offset = new_offset;
@@ -135,7 +162,7 @@ where
                     } else {
                         break;
                     }
-                },
+                }
                 None => {
                     break;
                 }
@@ -163,14 +190,25 @@ where
 {
     #[instrument(skip_all)]
     pub(crate) async fn move_until<F: Fn(Timestamp) -> bool>(mut self, f: F) -> Self {
-        while let Some(msg) = self.inner.consumer.poll(Timeout::After(Duration::from_millis(100))) {
+        while let Some(msg) = self
+            .inner
+            .consumer
+            .poll(Timeout::After(Duration::from_millis(100)))
+        {
             if let Some(msg) = msg
                 .ok()
                 .and_then(FBMessage::from_borrowed_message)
                 .filter(|m| f(FBMessage::timestamp(m)))
             {
                 self.message = Some(msg);
-                self.inner.send_status.send(SearchStatus::Text(format!("Message timestamp: {0}", self.message.as_ref().expect("").timestamp()))).await.expect("");
+                self.inner
+                    .send_status
+                    .send(SearchStatus::Text(format!(
+                        "Message timestamp: {0}",
+                        self.message.as_ref().expect("").timestamp()
+                    )))
+                    .await
+                    .expect("");
                 break;
             }
         }
@@ -194,7 +232,14 @@ where
 
             for _ in 0..number {
                 while let Some(msg) = messages.next() {
-                    self.inner.send_status.send(SearchStatus::Text(format!("Message timestamp: {0}", msg.timestamp()))).await.expect("");
+                    self.inner
+                        .send_status
+                        .send(SearchStatus::Text(format!(
+                            "Message timestamp: {0}",
+                            msg.timestamp()
+                        )))
+                        .await
+                        .expect("");
                     let new_timestamp = msg.timestamp();
                     if new_timestamp == timestamp {
                         if f(&msg) {

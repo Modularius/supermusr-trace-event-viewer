@@ -1,9 +1,9 @@
 //!
 //!
 mod app;
-mod graphics;
 mod cli_structs;
 mod finder;
+mod graphics;
 mod messages;
 mod tui;
 
@@ -29,10 +29,14 @@ use tokio::{
     signal::unix::{signal, SignalKind},
     time,
 };
-use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt};
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Layer};
 
 use crate::{
-    app::{App, AppDependencies}, cli_structs::{Select, Topics, UserBounds}, finder::{MessageFinder, SearchEngine}, graphics::{GraphSaver, SvgSaver}, tui::{Component, InputComponent}
+    app::{App, AppDependencies},
+    cli_structs::{Select, Topics, UserBounds},
+    finder::{MessageFinder, SearchEngine},
+    graphics::{GraphSaver, SvgSaver},
+    tui::{Component, InputComponent},
 };
 
 type Timestamp = DateTime<Utc>;
@@ -127,13 +131,12 @@ async fn main() -> anyhow::Result<()> {
     // This filter is applied to the stdout tracer
     let log_filter = EnvFilter::from_default_env();
 
-    let subscriber = tracing_subscriber::Registry::default()
-        .with(stdout_tracer.with_filter(log_filter));
+    let subscriber =
+        tracing_subscriber::Registry::default().with(stdout_tracer.with_filter(log_filter));
 
     //  This is only called once, so will never panic
     tracing::subscriber::set_global_default(subscriber)
         .expect("tracing::subscriber::set_global_default should only be called once");
-
 
     let consumer = create_default_consumer(
         &args.common_kafka_options.broker,
@@ -159,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut search_engine_update = tokio::time::interval(time::Duration::from_nanos(1));
 
-    terminal.draw(|frame|app.render(frame, frame.area()))?;
+    terminal.draw(|frame| app.render(frame, frame.area()))?;
 
     loop {
         tokio::select! {
@@ -191,10 +194,7 @@ async fn main() -> anyhow::Result<()> {
     }
     // Clean up terminal.
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     terminal.clear()?;
     /*

@@ -2,12 +2,22 @@ use std::path::PathBuf;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use crossterm::event::KeyCode;
-use ratatui::{layout::{Constraint, Direction, Layout, Rect, Spacing}, Frame, widgets::Tabs};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect, Spacing},
+    widgets::Tabs,
+    Frame,
+};
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 use supermusr_common::{Channel, DigitizerId};
 
 use crate::{
-    finder::{MessageFinder, SearchMode, SearchTarget}, graphics::FileFormat, tui::{ComponentContainer, ComponentStyle, EditBox, FocusableComponent, InputComponent, ListBox, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component, Select, Timestamp
+    finder::{MessageFinder, SearchMode, SearchTarget},
+    graphics::FileFormat,
+    tui::{
+        ComponentContainer, ComponentStyle, EditBox, FocusableComponent, InputComponent, ListBox,
+        ParentalFocusComponent, TuiComponent, TuiComponentBuilder,
+    },
+    Component, Select, Timestamp,
 };
 
 #[derive(Default, Clone, EnumCount, EnumIter)]
@@ -45,7 +55,11 @@ impl Setup {
     pub(crate) fn new(select: &Select) -> TuiComponent<Self> {
         let comp = Self {
             focus: Default::default(),
-            search_mode: ListBox::new(&SearchMode::iter().collect::<Vec<_>>(), Some("Search Mode"), Some(0)),
+            search_mode: ListBox::new(
+                &SearchMode::iter().collect::<Vec<_>>(),
+                Some("Search Mode"),
+                Some(0),
+            ),
             date: EditBox::new(select.timestamp.date_naive(), Some("Date (YYYY-MM-DD)")),
             time: EditBox::new(select.timestamp.time(), Some("Time (hh:mm:ss.f)")),
             number: EditBox::new(1, Some("Number to Collect")),
@@ -62,14 +76,14 @@ impl Setup {
         setup
     }
 
-    pub(crate) fn search<M: MessageFinder>(
-        &self,
-        message_finder: &mut M,
-    ) -> bool {
+    pub(crate) fn search<M: MessageFinder>(&self, message_finder: &mut M) -> bool {
         let timestamp = {
             let date = self.date.get();
             let time = self.time.get();
-            Timestamp::from_naive_utc_and_offset(NaiveDateTime::new(date.clone(), time.clone()), Utc)
+            Timestamp::from_naive_utc_and_offset(
+                NaiveDateTime::new(date.clone(), time.clone()),
+                Utc,
+            )
         };
         let number = *self.number.get();
         let channel = *self.channel.get();
@@ -105,20 +119,20 @@ impl Component for Setup {
         let (top, bottom) = {
             let chunk = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Ratio(1,2); 2])
+                .constraints([Constraint::Ratio(1, 2); 2])
                 .split(area);
             (chunk[0], chunk[1])
         };
-        
+
         //
         // Top Row
         //
- 
+
         // Date and Time/Search Params Division
         let (datetime, search_params) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1,2); 2])
+                .constraints([Constraint::Ratio(1, 2); 2])
                 .spacing(Spacing::Space(4))
                 .split(top);
             (chunk[0], chunk[1])
@@ -128,18 +142,18 @@ impl Component for Setup {
         let (date, time) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1,2); 2])
+                .constraints([Constraint::Ratio(1, 2); 2])
                 .split(datetime);
             (chunk[0], chunk[1])
         };
         self.date.render(frame, date);
         self.time.render(frame, time);
 
-        // Search Params Division  
+        // Search Params Division
         let (number, channel, digitiser_id) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1,3); 3])
+                .constraints([Constraint::Ratio(1, 3); 3])
                 .split(search_params);
             (chunk[0], chunk[1], chunk[2])
         };
@@ -147,7 +161,7 @@ impl Component for Setup {
         self.channel.render(frame, channel);
         self.digitiser_id.render(frame, digitiser_id);
 
-        //  
+        //
         // Bottom Row
         //
 
@@ -155,17 +169,17 @@ impl Component for Setup {
         let (search_settings, save_settings) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1,2); 2])
+                .constraints([Constraint::Ratio(1, 2); 2])
                 .spacing(Spacing::Space(4))
                 .split(bottom);
             (chunk[0], chunk[1])
         };
-        
+
         // Search Settings Division
         let (num_passes, min_step_size, step_size_mul) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1,3); 3])
+                .constraints([Constraint::Ratio(1, 3); 3])
                 .split(search_settings);
             (chunk[0], chunk[1], chunk[2])
         };
@@ -177,7 +191,7 @@ impl Component for Setup {
         let (save_path, format) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1,2); 2])
+                .constraints([Constraint::Ratio(1, 2); 2])
                 .split(save_settings);
             (chunk[0], chunk[1])
         };
@@ -208,11 +222,11 @@ impl ComponentContainer for Setup {
             Focus::Format => &mut self.format,
         }
     }
-    
+
     fn get_focus(&self) -> Self::Focus {
         self.focus.clone()
     }
-    
+
     fn set_focus(&mut self, focus: Self::Focus) {
         self.focus = focus;
     }

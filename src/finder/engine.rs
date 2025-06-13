@@ -4,13 +4,15 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{error, instrument};
 
 use crate::{
-    finder::{task::SearchTask, MessageFinder, SearchMode, SearchResults, SearchStatus, SearchTarget},
+    finder::{
+        task::SearchTask, MessageFinder, SearchMode, SearchResults, SearchStatus, SearchTarget,
+    },
     Select, Topics,
 };
 
 pub(crate) struct SearchEngine {
     /// The Kafka consumer object, the engine uses to poll for messages.
-    /// 
+    ///
     /// The object takes temporary ownership of the consumer object,
     /// if another instance of SearchEngine wants to use it,
     /// it must be passed to it.
@@ -22,7 +24,7 @@ pub(crate) struct SearchEngine {
     recv_results: mpsc::Receiver<(BaseConsumer, SearchResults)>,
     recv_status: mpsc::Receiver<SearchStatus>,
     status: Option<SearchStatus>,
-    // 
+    //
     results: Option<SearchResults>,
     //select: Select,
     //topics: Topics,
@@ -49,17 +51,16 @@ impl SearchEngine {
             handle: tokio::spawn(async move {
                 loop {
                     let (consumer, target) = recv_init.recv().await.expect("");
-                    
+
                     let task = SearchTask::new(consumer, &send_status, &select, &topics);
                     let (consumer, results) = task.search_by_timestamp(target).await;
-                    
+
                     send_results.send((consumer, results)).await.expect("");
                 }
             }),
         }
     }
 }
-
 
 impl Drop for SearchEngine {
     fn drop(&mut self) {
@@ -76,11 +77,11 @@ impl MessageFinder for SearchEngine {
         }
         self.consumer.is_some()
     }
-    
+
     fn status(&mut self) -> Option<SearchStatus> {
         self.status.take()
     }
-    
+
     fn results(&mut self) -> Option<SearchResults> {
         self.results.take()
     }
@@ -116,4 +117,3 @@ impl MessageFinder for SearchEngine {
         }
     }
 }
-

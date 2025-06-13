@@ -1,7 +1,7 @@
 mod builder;
 mod style;
-mod widgets;
 mod tui_component;
+mod widgets;
 
 use crossterm::event::KeyEvent;
 use ratatui::{
@@ -15,7 +15,7 @@ pub(crate) use builder::TuiComponentBuilder;
 
 pub(crate) use style::ComponentStyle;
 pub(crate) use tui_component::TuiComponent;
-pub(crate) use widgets::{TextBox, ListBox, Graph, GraphProperties, Channels, Statusbar, EditBox};
+pub(crate) use widgets::{Channels, EditBox, Graph, GraphProperties, ListBox, Statusbar, TextBox};
 
 /// Provides method to render any component in a [Frame]
 pub(crate) trait Component {
@@ -24,9 +24,9 @@ pub(crate) trait Component {
 }
 
 /// Provides methods for components which contain other components, and have a `Focus` function.
-pub(crate) trait ComponentContainer : Component {
+pub(crate) trait ComponentContainer: Component {
     /// The `enum` type which defines the child coponents.
-    type Focus : IntoEnumIterator + EnumCount;
+    type Focus: IntoEnumIterator + EnumCount;
 
     /// Maps each variant of [Self::Focus] to a type implementing [FocusableComponent].
     fn get_focused_component_mut(&mut self, focus: Self::Focus) -> &mut dyn FocusableComponent;
@@ -36,27 +36,27 @@ pub(crate) trait ComponentContainer : Component {
 
     /// Sets the current focus.
     fn set_focus(&mut self, focus: Self::Focus);
-    
+
     fn focused_component_mut(&mut self) -> &mut dyn FocusableComponent {
         let focus = self.get_focus();
         self.get_focused_component_mut(focus)
     }
-    
+
     /// Sets the focus to the given index (mod the number of children).
     fn set_focus_index(&mut self, index: isize) {
         self.focused_component_mut().set_focus(false);
-        self.set_focus(Self::Focus::iter()
-            .cycle()
-            .skip((Self::Focus::COUNT as isize + index) as usize % Self::Focus::COUNT)
-            .next()
-            .expect("")
+        self.set_focus(
+            Self::Focus::iter()
+                .cycle()
+                .skip((Self::Focus::COUNT as isize + index) as usize % Self::Focus::COUNT)
+                .next()
+                .expect(""),
         );
         self.focused_component_mut().set_focus(true);
     }
 }
 
-
-pub(crate) trait InputComponent : Component {
+pub(crate) trait InputComponent: Component {
     fn handle_key_press(&mut self, key: KeyEvent);
 }
 
@@ -81,8 +81,7 @@ impl BlockExt for Block<'_> {
             comp.get_builder().name
         };
         if let Some(name) = name {
-            self.title_top(name)
-                .title_alignment(Alignment::Center)
+            self.title_top(name).title_alignment(Alignment::Center)
         } else {
             self
         }

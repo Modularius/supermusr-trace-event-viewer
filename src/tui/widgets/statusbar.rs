@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     widgets::{Block, Borders, LineGauge},
-    Frame
+    Frame,
 };
 use strum::{Display, EnumString};
 use tracing::info;
@@ -11,8 +11,7 @@ use crate::{
     finder::{SearchResults, SearchStatus},
     messages::Cache,
     tui::{ComponentStyle, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder},
-    Component,
-    Select
+    Component, Select,
 };
 
 #[derive(Default, EnumString, Display)]
@@ -35,7 +34,7 @@ enum StatusMessage {
     #[strum(to_string = "Search Complete. Press <Enter> to search again.")]
     SearchFinished,
     #[strum(to_string = "{0}")]
-    Text(String)
+    Text(String),
 }
 
 pub(crate) struct Statusbar {
@@ -57,7 +56,7 @@ impl Statusbar {
                 status: TextBox::new(Default::default(), Some("Status")),
                 progress_steps: 0,
                 num_step_passes: select.step.num_step_passes,
-                total_steps: 2*select.step.num_step_passes + 4,
+                total_steps: 2 * select.step.num_step_passes + 4,
             })
     }
 
@@ -67,31 +66,34 @@ impl Statusbar {
             SearchStatus::TraceSearchInProgress(prog) => {
                 self.status.set(StatusMessage::TraceSearchInProgress);
                 self.progress_steps = prog + 1;
-            },
+            }
             SearchStatus::TraceSearchFinished => {
                 self.status.set(StatusMessage::TraceSearchFinished);
                 self.progress_steps = self.num_step_passes + 2;
-            },
+            }
             SearchStatus::EventListSearchInProgress(prog) => {
                 self.status.set(StatusMessage::EventListSearchFinished);
                 self.progress_steps = prog + self.num_step_passes + 2;
-            },
+            }
             SearchStatus::Halted => self.status.set(StatusMessage::SearchHalted),
             SearchStatus::Successful => {
                 self.status.set(StatusMessage::SearchFinished);
-                self.progress_steps = 2*self.num_step_passes + 3;
-            },
+                self.progress_steps = 2 * self.num_step_passes + 3;
+            }
             SearchStatus::Text(text) => self.status.set(StatusMessage::Text(text)),
-            SearchStatus::EventListSearchFinished => {
-
-            },
+            SearchStatus::EventListSearchFinished => {}
         }
-        info!("{0}",self.status.get());
-        info!("{0}",self.progress_steps);
+        info!("{0}", self.status.get());
+        info!("{0}", self.progress_steps);
     }
 
     pub(crate) fn set_info(&mut self, results: &SearchResults) {
-        self.info.set(format!("Found {} traces, in {},{} ms", results.cache.iter_traces().len(), results.time.num_seconds(), results.time.subsec_millis()));
+        self.info.set(format!(
+            "Found {} traces, in {},{} ms",
+            results.cache.iter_traces().len(),
+            results.time.num_seconds(),
+            results.time.subsec_millis()
+        ));
     }
 }
 
@@ -100,7 +102,11 @@ impl Component for Statusbar {
         let (info, status, progress) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Length(50), Constraint::Min(32), Constraint::Length(24)])
+                .constraints([
+                    Constraint::Length(50),
+                    Constraint::Min(32),
+                    Constraint::Length(24),
+                ])
                 .split(area);
             (chunk[0], chunk[1], chunk[2])
         };
@@ -108,8 +114,7 @@ impl Component for Statusbar {
         let gauge = LineGauge::default()
             .block(Block::new().borders(Borders::ALL))
             .style(Style::new().fg(Color::LightGreen).bg(Color::Black))
-            .ratio(self.progress_steps as f64/self.total_steps as f64);
-        
+            .ratio(self.progress_steps as f64 / self.total_steps as f64);
 
         self.info.render(frame, info);
         self.status.render(frame, status);

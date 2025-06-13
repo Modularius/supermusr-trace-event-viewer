@@ -1,23 +1,31 @@
-
-use std::{fs::create_dir_all, marker::PhantomData, ops::Range, path::{Path, PathBuf}};
+use std::{
+    fs::create_dir_all,
+    marker::PhantomData,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{bail, Error};
-use plotters::{chart::{ChartBuilder, ChartContext}, coord::{types::RangedCoordf32, Shift}, prelude::{BitMapBackend, Cartesian2d, Circle, DrawingArea, DrawingBackend, IntoDrawingArea, PathElement, SVGBackend}, series::{LineSeries, PointSeries}, style::{IntoFont, RGBColor, ShapeStyle, BLACK, BLUE, WHITE}};
+use plotters::{
+    chart::{ChartBuilder, ChartContext},
+    coord::{types::RangedCoordf32, Shift},
+    prelude::{
+        BitMapBackend, Cartesian2d, Circle, DrawingArea, DrawingBackend, IntoDrawingArea,
+        PathElement, SVGBackend,
+    },
+    series::{LineSeries, PointSeries},
+    style::{IntoFont, RGBColor, ShapeStyle, BLACK, BLUE, WHITE},
+};
 use supermusr_common::Channel;
 use tracing::{info, instrument};
 
 use crate::{messages::DigitiserTrace, GraphSaver};
 
-
 #[derive(Default)]
-pub(crate) struct SvgSaver {
-
-}
+pub(crate) struct SvgSaver {}
 
 impl GraphSaver for SvgSaver {
-    fn save_as_svg(trace: &DigitiserTrace, channels: Vec<Channel>, path: PathBuf) {
-        
-    }
+    fn save_as_svg(trace: &DigitiserTrace, channels: Vec<Channel>, path: PathBuf) {}
 }
 /*
 pub(crate) struct BuildGraph<'b,B> where B: Backend<'b> {
@@ -63,7 +71,7 @@ impl<'b, B> BuildGraph<'b, B> where B: Backend<'b>, <B::Backend as DrawingBacken
         root.present()?;
         Ok(())
     }
-    
+
     #[instrument(skip_all, level = "debug")]
     pub(crate) fn build_trace_graph<'a>(&'a self, root: &'a DrawingArea<B::Backend, Shift>, trace: &Trace, eventlist: Option<&EventList>) -> Result<(), anyhow::Error>
     {
@@ -76,7 +84,7 @@ impl<'b, B> BuildGraph<'b, B> where B: Backend<'b>, <B::Backend as DrawingBacken
             .build_cartesian_2d(self.x_range.clone(), self.y_range.clone())?;
             //.set_secondary_coord(0f32..10f32, -1.0f32..1.0f32);
 
-            
+
         chart
             .configure_mesh()
             .disable_x_mesh()
@@ -84,7 +92,7 @@ impl<'b, B> BuildGraph<'b, B> where B: Backend<'b>, <B::Backend as DrawingBacken
             //.y_desc("Log Scale")
             .y_label_formatter(&|x| format!("{:e}", x))
             .draw()?;
-        
+
         self.draw_trace_to_chart(&mut chart, trace)?;
         if let Some(eventlist) = eventlist {
             self.draw_eventlist_to_chart(&mut chart, eventlist)?;
@@ -123,7 +131,7 @@ impl<'b, B> BuildGraph<'b, B> where B: Backend<'b>, <B::Backend as DrawingBacken
     }
 
     pub(crate) fn build_event_graph(&self, root: &DrawingArea<SVGBackend, Shift>, trace: Trace) -> Result<(), anyhow::Error> {
-        
+
         Ok(())
     }
 } */

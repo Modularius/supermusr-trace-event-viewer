@@ -1,10 +1,10 @@
 mod app;
+mod display;
 mod results;
 mod setup;
-mod display;
 
+use display::Display;
 use results::Results;
 use setup::Setup;
-use display::Display;
 
 pub(crate) use app::{App, AppDependencies};

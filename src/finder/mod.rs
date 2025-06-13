@@ -17,7 +17,7 @@ pub(crate) use engine::SearchEngine;
 pub(crate) enum SearchMode {
     FromEnd,
     ByChannels,
-    ByDigitiserIds
+    ByDigitiserIds,
 }
 
 #[derive(Default)]
@@ -85,9 +85,9 @@ pub(crate) trait MessageFinder {
     type SearchMode;
 
     fn init_search(&mut self, target: SearchTarget) -> bool;
-    
+
     fn status(&mut self) -> Option<SearchStatus>;
-    
+
     fn results(&mut self) -> Option<SearchResults>;
 
     async fn update(&mut self);

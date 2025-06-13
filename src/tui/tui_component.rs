@@ -8,7 +8,8 @@ use ratatui::{
 };
 
 use crate::tui::{
-    builder::TuiComponentBuilder, BlockExt, Component, ComponentContainer, FocusableComponent, InputComponent, ParentalFocusComponent
+    builder::TuiComponentBuilder, BlockExt, Component, ComponentContainer, FocusableComponent,
+    InputComponent, ParentalFocusComponent,
 };
 
 pub(crate) struct TuiComponent<C: Component + Sized> {
@@ -41,7 +42,10 @@ impl<C: Component> TuiComponent<C> {
     }
 }
 
-impl<D> Deref for TuiComponent<D> where D: Component {
+impl<D> Deref for TuiComponent<D>
+where
+    D: Component,
+{
     type Target = D;
 
     fn deref(&self) -> &Self::Target {
@@ -49,7 +53,10 @@ impl<D> Deref for TuiComponent<D> where D: Component {
     }
 }
 
-impl<D> DerefMut for TuiComponent<D> where D: Component {    
+impl<D> DerefMut for TuiComponent<D>
+where
+    D: Component,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.comp
     }
@@ -61,11 +68,11 @@ impl<C: ComponentContainer> ComponentContainer for TuiComponent<C> {
     fn get_focused_component_mut(&mut self, focus: Self::Focus) -> &mut dyn FocusableComponent {
         self.comp.get_focused_component_mut(focus)
     }
-    
+
     fn get_focus(&self) -> Self::Focus {
         self.comp.get_focus()
     }
-    
+
     fn set_focus(&mut self, focus: Self::Focus) {
         self.comp.set_focus(focus);
     }

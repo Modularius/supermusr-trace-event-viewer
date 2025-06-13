@@ -1,17 +1,26 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::Rect, style::{Color, Modifier, Style}, widgets::Tabs, Frame
+    layout::Rect,
+    style::{Color, Modifier, Style},
+    widgets::Tabs,
+    Frame,
 };
 use supermusr_common::Channel;
 
-use crate::{tui::{ComponentStyle, FocusableComponent, InputComponent, ParentalFocusComponent, TuiComponent, TuiComponentBuilder}, Component};
+use crate::{
+    tui::{
+        ComponentStyle, FocusableComponent, InputComponent, ParentalFocusComponent, TuiComponent,
+        TuiComponentBuilder,
+    },
+    Component,
+};
 
 #[derive(Clone)]
 pub(crate) struct Channels {
     has_focus: bool,
     parent_has_focus: bool,
     channels: Vec<Channel>,
-    channel_index : usize,
+    channel_index: usize,
 }
 
 impl Channels {
@@ -20,11 +29,11 @@ impl Channels {
             .is_in_block(true)
             .with_name("Channels")
             .build(Self {
-            channels: Default::default(),
-            has_focus: false,
-            parent_has_focus: false,
-            channel_index: 0,
-        })
+                channels: Default::default(),
+                has_focus: false,
+                parent_has_focus: false,
+                channel_index: 0,
+            })
     }
 
     pub(crate) fn set(&mut self, channels: Vec<Channel>) {
@@ -46,11 +55,14 @@ impl Component for Channels {
         if self.channels.is_empty() {
             return;
         }
-        
-        let style = Style::new().bg(Color::Rgb(0,64,0)).fg(Color::Gray);
-        let select_style = Style::new().bg(Color::Green).fg(Color::Black).add_modifier(Modifier::BOLD);
 
-        let tabs = Tabs::new(self.channels.iter().map(|c|format!(" {c} ")))
+        let style = Style::new().bg(Color::Rgb(0, 64, 0)).fg(Color::Gray);
+        let select_style = Style::new()
+            .bg(Color::Green)
+            .fg(Color::Black)
+            .add_modifier(Modifier::BOLD);
+
+        let tabs = Tabs::new(self.channels.iter().map(|c| format!(" {c} ")))
             .style(style)
             .highlight_style(select_style)
             //.divider(symbols::line::THICK_VERTICAL)
@@ -67,7 +79,8 @@ impl InputComponent for Channels {
         }
         if self.has_focus {
             if key.code == KeyCode::Left {
-                self.channel_index = (self.channels.len() + self.channel_index - 1) % self.channels.len();
+                self.channel_index =
+                    (self.channels.len() + self.channel_index - 1) % self.channels.len();
             } else if key.code == KeyCode::Right {
                 self.channel_index = (self.channel_index + 1) % self.channels.len();
             }
