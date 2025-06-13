@@ -1,23 +1,29 @@
-use chrono::Utc;
+mod by_timestamp;
+mod capture;
+mod from_end;
+
+use std::marker::PhantomData;
+
 use rdkafka::consumer::BaseConsumer;
 use tokio::sync::mpsc;
 use tracing::{error, instrument};
 
-use crate::{
-    cli_structs::Steps,
-    finder::{searcher::Searcher, MessageFinder, SearchResults, SearchStatus, SearchTarget},
-    messages::{Cache, EventListMessage, FBMessage, TraceMessage},
-    Select, Topics,
-};
+use crate::{finder::SearchStatus, Select, Topics};
 
-pub(crate) struct SearchTask<'a> {
+pub(crate) use by_timestamp::SearchByTimestamp;
+pub(crate) use from_end::SearchFromEnd;
+
+pub(crate) trait TaskClass {}
+
+pub(crate) struct SearchTask<'a, C : TaskClass> {
     consumer: BaseConsumer,
     send_status: &'a mpsc::Sender<SearchStatus>,
     select: &'a Select,
     topics: &'a Topics,
+    phantom: PhantomData<C>,
 }
 
-impl<'a> SearchTask<'a> {
+impl<'a, C: TaskClass> SearchTask<'a, C> {
     pub(crate) fn new(
         consumer: BaseConsumer,
         send_status: &'a mpsc::Sender<SearchStatus>,
@@ -29,6 +35,7 @@ impl<'a> SearchTask<'a> {
             send_status,
             select,
             topics,
+            phantom: PhantomData
         }
     }
 
@@ -38,7 +45,7 @@ impl<'a> SearchTask<'a> {
             error!("{e}");
         }
     }
-
+/*
     #[instrument(skip_all)]
     async fn search_topic_by_timestamp<M, E, A>(
         &self,
@@ -138,8 +145,9 @@ impl<'a> SearchTask<'a> {
         }
 
         for eventlist in eventlist_results.iter() {
-            cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
+            cache.push_events(&eventlist.get_unpacked_message().expect(""));
         }
+        cache.attach_event_lists_to_trace();
 
         // Send cache via status
         self.emit_status(SearchStatus::Successful).await;
@@ -202,12 +210,13 @@ impl<'a> SearchTask<'a> {
         }
 
         for eventlist in eventlist_results.iter() {
-            cache.push_event_list_to_trace(&eventlist.get_unpacked_message().expect(""));
+            cache.push_events(&eventlist.get_unpacked_message().expect(""));
         }
+        cache.attach_event_lists_to_trace();
 
         // Send cache via status
         self.emit_status(SearchStatus::Successful).await;
         let time = Utc::now() - start;
         (self.consumer, SearchResults { cache, time })
-    }
+    } */
 }

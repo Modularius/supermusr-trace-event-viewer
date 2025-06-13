@@ -5,7 +5,8 @@ use tracing::{error, instrument};
 
 use crate::{
     finder::{
-        task::SearchTask, MessageFinder, SearchMode, SearchResults, SearchStatus, SearchTarget,
+        task::{SearchByTimestamp, SearchFromEnd, SearchTask},
+        MessageFinder, SearchMode, SearchResults, SearchStatus, SearchTarget,
     },
     Select, Topics,
 };
@@ -52,11 +53,26 @@ impl SearchEngine {
                 loop {
                     let (consumer, target) = recv_init.recv().await.expect("");
 
-                    let task = SearchTask::new(consumer, &send_status, &select, &topics);
                     let (consumer, results) = match target.mode {
-                        SearchMode::FromEnd => task.search_from_end(target).await,
+                        SearchMode::FromEnd => {
+                            SearchTask::<SearchFromEnd>::new(
+                                consumer,
+                                &send_status,
+                                &select,
+                                &topics,
+                            )
+                            .search(target)
+                            .await
+                        }
                         SearchMode::ByChannels | SearchMode::ByDigitiserIds => {
-                            task.search_by_timestamp(target).await
+                            SearchTask::<SearchByTimestamp>::new(
+                                consumer,
+                                &send_status,
+                                &select,
+                                &topics,
+                            )
+                            .search(target)
+                            .await
                         }
                     };
 

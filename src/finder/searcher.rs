@@ -10,15 +10,28 @@ use tracing::instrument;
 
 use crate::{finder::SearchStatus, messages::FBMessage, Timestamp};
 
+/// Object to search through the broker from a given offset, on a given topic, for messages of type `M`.
 pub(crate) struct Searcher<'a, M> {
+    /// Reference to the Kafka consumer.
     consumer: &'a BaseConsumer,
+    /// Topic to search on.
     topic: String,
+    /// Current offset.
     offset: i64,
+    /// Send channel, along which status messages should be sent.
     send_status: mpsc::Sender<SearchStatus>,
+    /// Results accumulate here.
     results: Vec<M>,
 }
 
 impl<'a, M> Searcher<'a, M> {
+    /// Creates a new instance, and assigns the given topic to the broker's consumer.
+    ///
+    /// # Attributes
+    /// - consumer: the broker's consumer to use.
+    /// - topic: the topic to search on.
+    /// - offset: the offset to search from.
+    /// - send_status: send channel, along which status messages should be sent.
     #[instrument(skip_all)]
     pub(crate) fn new(
         consumer: &'a BaseConsumer,
@@ -48,6 +61,7 @@ impl<'a, M> Searcher<'a, M> {
     }
 
     #[instrument(skip_all)]
+    /// Consumer the searcher and create a backstep iterator.
     pub(crate) fn iter_backstep(self) -> BackstepIter<'a, M> {
         BackstepIter {
             inner: self,
@@ -56,6 +70,7 @@ impl<'a, M> Searcher<'a, M> {
     }
 
     #[instrument(skip_all)]
+    /// Consumer the searcher and create a forward iterator.
     pub(crate) fn iter_forward(self) -> ForwardSearchIter<'a, M> {
         ForwardSearchIter {
             inner: self,
@@ -63,15 +78,18 @@ impl<'a, M> Searcher<'a, M> {
         }
     }
 
+    /// Sets the offset.
     fn set_offset(&mut self, offset: i64) {
         self.offset = offset;
     }
 
+    /// Gets the offset.
     pub(crate) fn get_offset(&self) -> i64 {
         self.offset
     }
 }
 
+/// Extracts the results from the searcher, when the user is finished with it.
 impl<'a, M> Into<Vec<M>> for Searcher<'a, M> {
     #[instrument(skip_all)]
     fn into(self) -> Vec<M> {
@@ -114,17 +132,24 @@ where
     }
 }
 
+/// Performs a backwards search on the broker from the searcher's offset.
+///
+/// Note this iterator can only move the [Searcher]'s offset, it cannot accumulate results.
+/// Also note, this iterator is not a real iterator (as in it does not implement [Iterator]).
+/// Instead it's methods are inspired by those frequently found in actual iterators.
 pub(crate) struct BackstepIter<'a, M> {
     inner: Searcher<'a, M>,
     step_size: Option<i64>,
 }
 
 impl<'a, M> BackstepIter<'a, M> {
+    /// Sets the
     pub(crate) fn step_size(&mut self, step_size: i64) -> &mut Self {
         self.step_size = Some(step_size);
         self
     }
 
+    /// Consumes the iterator and returns the original [Searcher] object.
     pub(crate) fn collect(self) -> Searcher<'a, M> {
         self.inner
     }
@@ -134,6 +159,11 @@ impl<'a, M> BackstepIter<'a, M>
 where
     M: FBMessage<'a>,
 {
+    /// Repeatedly search the topic backwards, in increments of [Self::step_size],
+    /// until the given predicate of the message's timestamp is satisfied.
+    ///
+    /// # Attributes
+    /// - f: a predicte taking a timestamp, it should return true when the timestamp is later than the target.
     #[instrument(skip_all)]
     pub(crate) async fn backstep_until_time<F: Fn(Timestamp) -> bool>(
         &mut self,
@@ -146,7 +176,6 @@ where
                 None => return self,
             }
         };
-        //self.inner.message(offset).await.expect("").timestamp();
 
         while f(earliest) {
             let new_offset = offset
@@ -173,12 +202,18 @@ where
     }
 }
 
+/// Searches on a topic forwards, one message at a time.
+///
+/// Note this iterator can both move the [Searcher]'s offset and accumulate results.
+/// Also note, this iterator is not a real iterator (as in it does not implement [Iterator]).
+/// Instead it's methods are inspired by those frequently found in actual iterators.
 pub(crate) struct ForwardSearchIter<'a, M> {
     inner: Searcher<'a, M>,
     message: Option<M>,
 }
 
 impl<'a, M> ForwardSearchIter<'a, M> {
+    /// Consumes the iterator and returns the original [Searcher] object.
     pub(crate) fn collect(self) -> Searcher<'a, M> {
         self.inner
     }
@@ -188,6 +223,10 @@ impl<'a, M> ForwardSearchIter<'a, M>
 where
     M: FBMessage<'a>,
 {
+    /// Steps forward, message by message, until the given predicate fails.
+    ///
+    /// # Attributes
+    /// - f: a predicte taking a timestamp, it should return true when the timestamp is earlier than the target.
     #[instrument(skip_all)]
     pub(crate) async fn move_until<F: Fn(Timestamp) -> bool>(mut self, f: F) -> Self {
         while let Some(msg) = self
@@ -215,6 +254,10 @@ where
         self
     }
 
+    /// Steps forward, message by message, acquiring messages which satisfy the predicate, until the given number of messages are obtained. [TODO]
+    ///
+    /// # Attributes
+    /// - f: a predicte taking a timestamp, it should return true when the timestamp is earlier than the target.
     #[instrument(skip_all)]
     pub(crate) async fn acquire_while<F: Fn(&M) -> bool>(mut self, f: F, number: usize) -> Self {
         if let Some(first_message) = self.message.take() {

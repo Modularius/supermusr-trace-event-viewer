@@ -30,8 +30,8 @@ impl Bound {
 
     fn transform(&self, zoom_factor: f64, delta: f64) -> Self {
         Self {
-            min: (self.min - delta) / zoom_factor + delta,
-            max: (self.max - delta) / zoom_factor + delta,
+            min: (self.min - self.mid_point()) / zoom_factor + delta,
+            max: (self.max - self.mid_point()) / zoom_factor + delta,
         }
     }
 }

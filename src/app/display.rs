@@ -7,7 +7,8 @@ use ratatui::{
 use crate::{
     messages::{EventList, Trace},
     tui::{
-        ComponentStyle, FocusableComponent, Graph, GraphProperties, InputComponent, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder
+        ComponentStyle, FocusableComponent, Graph, InputComponent, ParentalFocusComponent, TextBox,
+        TuiComponent, TuiComponentBuilder,
     },
     Component,
 };
@@ -26,12 +27,15 @@ impl Display {
     }
 
     pub(crate) fn select(&mut self, trace_data: &Trace, event_data: Option<&EventList>) {
-        self.graph.set(trace_data, event_data)
+        self.graph.set(trace_data, event_data);
+        if let Some(properties) = self.graph.get_properties() {
+            self.info.set(format!("{}", properties.get_info()));
+        }
     }
 
-    pub(crate) fn set_info(&mut self, info: &str) {
+    /*pub(crate) fn set_info(&mut self, info: &str) {
         self.info.set(info.to_string())
-    }
+    }*/
 }
 
 impl ParentalFocusComponent for Display {
@@ -57,34 +61,22 @@ impl Component for Display {
 
 impl InputComponent for Display {
     fn handle_key_press(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Char('+') {
-            self.graph
-                .get_properties_mut()
-                .map(GraphProperties::zoom_in);
-        } else if key.code == KeyCode::Char('-') {
-            self.graph
-                .get_properties_mut()
-                .map(GraphProperties::zoom_out);
-        } else if key.code == KeyCode::Up {
-            self.graph
-                .get_properties_mut()
-                .map(|p| p.move_viewport(0.0, 1.0));
-        } else if key.code == KeyCode::Down {
-            self.graph
-                .get_properties_mut()
-                .map(|p| p.move_viewport(0.0, -1.0));
-        } else if key.code == KeyCode::Left {
-            self.graph
-                .get_properties_mut()
-                .map(|p| p.move_viewport(-1.0, 0.0));
-        } else if key.code == KeyCode::Right {
-            self.graph
-                .get_properties_mut()
-                .map(|p| p.move_viewport(1.0, 0.0));
-        }
-        self.graph.get_properties_mut().inspect(|properties|
+        if let Some(properties) = self.graph.get_properties_mut() {
+            if key.code == KeyCode::Char('+') {
+                properties.zoom_in();
+            } else if key.code == KeyCode::Char('-') {
+                properties.zoom_out();
+            } else if key.code == KeyCode::Up {
+                properties.move_viewport(0.0, 1.0);
+            } else if key.code == KeyCode::Down {
+                properties.move_viewport(0.0, -1.0);
+            } else if key.code == KeyCode::Left {
+                properties.move_viewport(-1.0, 0.0);
+            } else if key.code == KeyCode::Right {
+                properties.move_viewport(1.0, 0.0);
+            }
             self.info.set(format!("{}", properties.get_info()))
-        );
+        }
     }
 }
 
