@@ -15,7 +15,7 @@ pub(crate) use from_end::SearchFromEnd;
 
 pub(crate) trait TaskClass {}
 
-pub(crate) struct SearchTask<'a, C : TaskClass> {
+pub(crate) struct SearchTask<'a, C: TaskClass> {
     consumer: StreamConsumer,
     send_status: &'a mpsc::Sender<SearchStatus>,
     select: &'a Select,
@@ -35,7 +35,7 @@ impl<'a, C: TaskClass> SearchTask<'a, C> {
             send_status,
             select,
             topics,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -45,7 +45,7 @@ impl<'a, C: TaskClass> SearchTask<'a, C> {
             error!("{e}");
         }
     }
-/*
+    /*
     #[instrument(skip_all)]
     async fn search_topic_by_timestamp<M, E, A>(
         &self,

@@ -3,22 +3,23 @@ use rdkafka::consumer::{BaseConsumer, StreamConsumer};
 use tracing::instrument;
 
 use crate::{
-    finder::{searcher::Searcher, task::{SearchTask, TaskClass}, SearchResults, SearchStatus, SearchTarget},
+    finder::{
+        searcher::Searcher,
+        task::{SearchTask, TaskClass},
+        SearchResults, SearchStatus, SearchTarget,
+    },
     messages::{Cache, EventListMessage, FBMessage, TraceMessage},
 };
 
 pub(crate) struct SearchFromEnd;
-impl TaskClass for SearchFromEnd{}
+impl TaskClass for SearchFromEnd {}
 
 impl<'a> SearchTask<'a, SearchFromEnd> {
     /// Performs a FromEnd search.
     /// # Attributes
     /// - target: what to search for.
     #[instrument(skip_all)]
-    pub(crate) async fn search(
-        self,
-        target: SearchTarget,
-    ) -> (StreamConsumer, SearchResults) {
+    pub(crate) async fn search(self, target: SearchTarget) -> (StreamConsumer, SearchResults) {
         let start = Utc::now();
 
         let mut cache = Cache::default();

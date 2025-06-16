@@ -108,8 +108,8 @@ impl Setup {
         PathBuf::from(self.save_path.get())
     }
 
-    pub(crate) fn get_image_size(&self) -> (u32,u32) {
-        (*self.width.get(),*self.height.get())
+    pub(crate) fn get_image_size(&self) -> (u32, u32) {
+        (*self.width.get(), *self.height.get())
     }
 }
 

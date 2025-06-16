@@ -18,10 +18,10 @@ pub(crate) struct Cache {
 }
 
 impl Cache {
-    pub(crate) fn clear(&mut self) {
+    /*pub(crate) fn clear(&mut self) {
         self.traces.clear();
         self.events.clear();
-    }
+    }*/
 
     pub(crate) fn push_trace(&mut self, msg: &DigitizerAnalogTraceMessage<'_>) {
         info!("New Trace");

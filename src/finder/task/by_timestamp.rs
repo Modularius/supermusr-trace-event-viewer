@@ -4,7 +4,11 @@ use tracing::instrument;
 
 use crate::{
     cli_structs::Steps,
-    finder::{searcher::Searcher, task::{SearchTask, TaskClass}, SearchResults, SearchStatus, SearchTarget},
+    finder::{
+        searcher::Searcher,
+        task::{SearchTask, TaskClass},
+        SearchResults, SearchStatus, SearchTarget,
+    },
     messages::{Cache, FBMessage},
 };
 
@@ -12,7 +16,7 @@ pub(crate) struct SearchByTimestamp;
 impl TaskClass for SearchByTimestamp {}
 
 impl<'a> SearchTask<'a, SearchByTimestamp> {
-    /// 
+    ///
     #[instrument(skip_all)]
     async fn search_topic<M, E, A>(
         &self,
@@ -60,10 +64,7 @@ impl<'a> SearchTask<'a, SearchByTimestamp> {
     /// # Attributes
     /// - target: what to search for.
     #[instrument(skip_all)]
-    pub(crate) async fn search(
-        self,
-        target: SearchTarget,
-    ) -> (StreamConsumer, SearchResults) {
+    pub(crate) async fn search(self, target: SearchTarget) -> (StreamConsumer, SearchResults) {
         let start = Utc::now();
 
         let mut cache = Cache::default();

@@ -24,7 +24,7 @@ pub(crate) struct Searcher<'a, M, C> {
     results: Vec<M>,
 }
 
-impl<'a, M, C : Consumer> Searcher<'a, M, C> {
+impl<'a, M, C: Consumer> Searcher<'a, M, C> {
     /// Creates a new instance, and assigns the given topic to the broker's consumer.
     ///
     /// # Attributes
@@ -112,9 +112,10 @@ where
             )
             .expect("");
 
-        let msg : Option<M> = self
+        let msg: Option<M> = self
             .consumer
-            .recv().await
+            .recv()
+            .await
             .ok()
             .and_then(FBMessage::from_borrowed_message);
 
@@ -230,13 +231,9 @@ where
     /// - f: a predicte taking a timestamp, it should return true when the timestamp is earlier than the target.
     #[instrument(skip_all)]
     pub(crate) async fn move_until<F: Fn(Timestamp) -> bool>(mut self, f: F) -> Self {
-        while let Ok(msg) = self
-            .inner
-            .consumer
-            .recv().await
-        {
-            if let Some(msg) = FBMessage::from_borrowed_message(msg)
-                .filter(|m| f(FBMessage::timestamp(m)))
+        while let Ok(msg) = self.inner.consumer.recv().await {
+            if let Some(msg) =
+                FBMessage::from_borrowed_message(msg).filter(|m| f(FBMessage::timestamp(m)))
             {
                 self.message = Some(msg);
                 self.inner
@@ -265,19 +262,24 @@ where
                 self.inner.results.push(first_message);
             }
 
-            let mut messages : Option<M> = self
+            let mut messages: Option<M> = self
                 .inner
                 .consumer
-                .recv().await
+                .recv()
+                .await
                 .ok()
                 .and_then(FBMessage::from_borrowed_message);
 
             for _ in 0..number {
                 while let Some(msg) = messages {
-                    
-                    messages = self.inner.consumer.recv().await.ok()
+                    messages = self
+                        .inner
+                        .consumer
+                        .recv()
+                        .await
+                        .ok()
                         .and_then(FBMessage::from_borrowed_message);
-                    
+
                     self.inner
                         .send_status
                         .send(SearchStatus::Text(format!(

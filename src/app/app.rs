@@ -32,7 +32,7 @@ pub(crate) enum Focus {
 }
 
 pub(crate) struct App<D: AppDependencies> {
-    /// 
+    ///
     cache: Option<Cache>,
     /// Flag indicating the program should quit.
     quit: bool,
@@ -49,7 +49,7 @@ pub(crate) struct App<D: AppDependencies> {
 
 impl<'a, D: AppDependencies> App<D> {
     /// Creates a new App instance.
-    /// 
+    ///
     /// # Attributes
     /// - message_finder: TODO
     /// - select: TODO
@@ -194,15 +194,25 @@ impl<D: AppDependencies> InputComponent for App<D> {
                 Focus::Display => {
                     if let Some(cache) = &self.cache {
                         if let Some((metadata, trace, channel)) = self.results.select(cache) {
-                            D::GraphSaver::save_as_svg(trace,
+                            D::GraphSaver::save_as_svg(
+                                trace,
                                 vec![channel],
-                                FileFormat::Svg.build_path(&self.setup.get_path(), metadata, channel).expect(""),
-                                self.setup.get_image_size(), 
+                                FileFormat::Svg
+                                    .build_path(&self.setup.get_path(), metadata, channel)
+                                    .expect(""),
+                                self.setup.get_image_size(),
                                 Bounds {
-                                    time: Bound::from(1.0, [0, trace.traces.len() as Time].into_iter()),
-                                    intensity: Bound::from(1.0, trace.traces[&channel].iter().copied())
-                                }
-                            ).expect("");
+                                    time: Bound::from(
+                                        1.0,
+                                        [0, trace.traces[&channel].len() as Time].into_iter(),
+                                    ),
+                                    intensity: Bound::from(
+                                        1.0,
+                                        trace.traces[&channel].iter().copied(),
+                                    ),
+                                },
+                            )
+                            .expect("");
                         }
                     }
                 }

@@ -1,9 +1,7 @@
-use std::{io::Stdout, str::FromStr};
+use std::str::FromStr;
 
-use crossterm::event::KeyEvent;
 use ratatui::{
     layout::{Alignment, Rect},
-    prelude::CrosstermBackend,
     style::{Color, Style},
     widgets::Paragraph,
     Frame,

@@ -56,20 +56,37 @@ pub(crate) trait ComponentContainer: Component {
     }
 }
 
+/// Provides method to handle user key events.
+///
+/// This method does not return any value, so all results of user input should
+/// be stored as internal state.
 pub(crate) trait InputComponent: Component {
+    ///
     fn handle_key_press(&mut self, key: KeyEvent);
 }
 
+/// Provides handling for components which can be given the focus by the user
+/// or its parent component.
 pub(crate) trait FocusableComponent: InputComponent {
+    /// Set the focus on or off for this component.
+    ///
+    /// Only one child component should ever have the focus at one time.
+    /// This is not checked, so the parent is responsible for ensuring this behaviour.
     fn set_focus(&mut self, focus: bool);
 }
 
+/// Provides handling for informing a component when an ancestor has been given, or lost the focus.
 pub(crate) trait ParentalFocusComponent: Component {
+    ///
     fn propagate_parental_focus(&mut self, focus: bool);
 }
 
+/// Handles complex title and border handling which depends on the state of a component.
 pub(crate) trait BlockExt {
+    /// Sets the block title to the correct content and style according to the state of `comp`.
     fn set_title<C: Component>(self, comp: &TuiComponent<C>) -> Self;
+
+    /// Sets the block border to the correct style according to the state of `comp`.
     fn set_border<C: Component>(self, comp: &TuiComponent<C>) -> Self;
 }
 

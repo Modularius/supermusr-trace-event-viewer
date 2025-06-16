@@ -3,24 +3,30 @@ use std::path::PathBuf;
 use plotters::{
     chart::{ChartBuilder, ChartContext},
     coord::{types::RangedCoordf64, Shift},
-    prelude::{
-        Cartesian2d, Circle, DrawingArea, IntoDrawingArea,
-        PathElement, SVGBackend,
-    },
+    prelude::{Cartesian2d, Circle, DrawingArea, IntoDrawingArea, PathElement, SVGBackend},
     series::{LineSeries, PointSeries},
     style::{IntoFont, ShapeStyle, BLACK, BLUE, WHITE},
 };
 use supermusr_common::Channel;
 use tracing::instrument;
 
-use crate::{graphics::Bounds, messages::{DigitiserTrace, EventList, Trace}, GraphSaver};
+use crate::{
+    graphics::Bounds,
+    messages::{DigitiserTrace, EventList, Trace},
+    GraphSaver,
+};
 
 type MyDrawingArea<'a> = DrawingArea<SVGBackend<'a>, Shift>;
-type MyChartContext<'a> = ChartContext<'a, SVGBackend<'a>, Cartesian2d<RangedCoordf64, RangedCoordf64>>;
+type MyChartContext<'a> =
+    ChartContext<'a, SVGBackend<'a>, Cartesian2d<RangedCoordf64, RangedCoordf64>>;
 
-trait MyBuilder<'a> : Sized {
+trait MyBuilder<'a>: Sized {
     fn build_trace_graph(root: &MyDrawingArea<'a>, bounds: Bounds) -> anyhow::Result<Self>;
-    fn draw_eventlist_to_chart(&mut self, eventlist: &EventList, label: &str) -> Result<(), anyhow::Error>;
+    fn draw_eventlist_to_chart(
+        &mut self,
+        eventlist: &EventList,
+        label: &str,
+    ) -> Result<(), anyhow::Error>;
     fn draw_trace_to_chart(&mut self, trace: &Trace, label: &str) -> Result<(), anyhow::Error>;
 }
 
@@ -29,16 +35,21 @@ pub(crate) struct SvgSaver {}
 
 impl<'a> MyBuilder<'a> for MyChartContext<'a> {
     #[instrument(skip_all, level = "debug")]
-    fn build_trace_graph(root: &MyDrawingArea<'a>, bounds: Bounds) -> anyhow::Result<MyChartContext<'a>> {
+    fn build_trace_graph(
+        root: &MyDrawingArea<'a>,
+        bounds: Bounds,
+    ) -> anyhow::Result<MyChartContext<'a>> {
         let mut chart = ChartBuilder::on(root)
             .x_label_area_size(35)
             .y_label_area_size(40)
             //.right_y_label_area_size(40)
             .margin(5)
             .caption("Trace", ("sans-serif", 50.0).into_font())
-            .build_cartesian_2d(bounds.time.min..bounds.time.max, bounds.intensity.min..bounds.intensity.max)?;
-            //.set_secondary_coord(0f32..10f32, -1.0f32..1.0f32);
-
+            .build_cartesian_2d(
+                bounds.time.min..bounds.time.max,
+                bounds.intensity.min..bounds.intensity.max,
+            )?;
+        //.set_secondary_coord(0f32..10f32, -1.0f32..1.0f32);
 
         chart
             .configure_mesh()
@@ -52,28 +63,31 @@ impl<'a> MyBuilder<'a> for MyChartContext<'a> {
     }
 
     #[instrument(skip_all, level = "debug")]
-    fn draw_eventlist_to_chart(&mut self, eventlist: &EventList, label: &str) -> Result<(), anyhow::Error>
-    {
-        let data = eventlist.iter().map(|el|(el.time as f64, el.intensity as f64));
-        let ps : PointSeries<_,_,Circle<_,_>,_> = PointSeries::new(data, 4, ShapeStyle::from(&BLACK));
+    fn draw_eventlist_to_chart(
+        &mut self,
+        eventlist: &EventList,
+        label: &str,
+    ) -> Result<(), anyhow::Error> {
+        let data = eventlist
+            .iter()
+            .map(|el| (el.time as f64, el.intensity as f64));
+        let ps: PointSeries<_, _, Circle<_, _>, _> =
+            PointSeries::new(data, 4, ShapeStyle::from(&BLACK));
         self.draw_series(ps)?
             .label(label)
-            .legend(|(x, y)| Circle::new((x,y), 4, BLACK));
+            .legend(|(x, y)| Circle::new((x, y), 4, BLACK));
         Ok(())
     }
 
     #[instrument(skip_all, level = "debug")]
-    fn draw_trace_to_chart(&mut self, trace: &Trace, label: &str) -> Result<(), anyhow::Error>
-    {
-        let data = trace.iter()
+    fn draw_trace_to_chart(&mut self, trace: &Trace, label: &str) -> Result<(), anyhow::Error> {
+        let data = trace
+            .iter()
             .cloned()
             .enumerate()
-            .map(|(x,y)|(x as f64, y as f64));
-        
-        self.draw_series(LineSeries::new(
-                data,
-                &BLUE,
-            ))?
+            .map(|(x, y)| (x as f64, y as f64));
+
+        self.draw_series(LineSeries::new(data, &BLUE))?
             .label(label)
             .legend(|(x, y)| PathElement::new(vec![(x - 10, y), (x + 10, y)], BLUE));
         Ok(())
@@ -81,15 +95,20 @@ impl<'a> MyBuilder<'a> for MyChartContext<'a> {
 }
 
 impl GraphSaver for SvgSaver {
-    fn save_as_svg(trace: &DigitiserTrace, channels: Vec<Channel>, path: PathBuf, (width, height): (u32,u32), bounds: Bounds) -> Result<(), anyhow::Error> {
-        let mut root = SVGBackend::new(&path, (width, height))
-            .into_drawing_area();
+    fn save_as_svg(
+        trace: &DigitiserTrace,
+        channels: Vec<Channel>,
+        path: PathBuf,
+        (width, height): (u32, u32),
+        bounds: Bounds,
+    ) -> Result<(), anyhow::Error> {
+        let mut root = SVGBackend::new(&path, (width, height)).into_drawing_area();
 
         root.fill(&WHITE)?;
 
         let mut chart = MyChartContext::build_trace_graph(&mut root, bounds)?;
-        
-        for c in channels {            
+
+        for c in channels {
             chart.draw_trace_to_chart(&trace.traces[&c], &format!("trace[{c}]"))?;
             if let Some(eventlist) = &trace.events {
                 chart.draw_eventlist_to_chart(&eventlist[&c], &format!("event[{c}]"))?;
@@ -100,7 +119,7 @@ impl GraphSaver for SvgSaver {
             .configure_series_labels()
             .background_style(WHITE)
             .draw()?;
-        
+
         root.present()?;
         Ok(())
     }

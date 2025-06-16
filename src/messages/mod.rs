@@ -3,7 +3,7 @@ mod cache;
 
 use chrono::{DateTime, Utc};
 use rdkafka::{message::BorrowedMessage, Message};
-use std::{collections::HashMap, ops::Range};
+use std::collections::HashMap;
 use supermusr_common::{Channel, DigitizerId, Intensity, Time};
 use supermusr_streaming_types::{
     dat2_digitizer_analog_trace_v2_generated::{
@@ -18,6 +18,7 @@ use supermusr_streaming_types::{
 
 pub(crate) use cache::Cache;
 
+/*
 #[derive(Clone)]
 pub(crate) struct Bounds {
     /// Minimum time bin to graph.
@@ -110,7 +111,7 @@ impl Bounds {
         self.intensity_min as f32..self.intensity_max as f32
     }
 }
-
+*/
 pub(crate) trait CreateFromMessage<M> {
     fn create_from_message(msg: &M) -> Self;
 }

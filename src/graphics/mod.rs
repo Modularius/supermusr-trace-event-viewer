@@ -21,7 +21,12 @@ pub(crate) enum FileFormat {
 }
 
 impl FileFormat {
-    pub(crate) fn build_path<'a>(self, path: &'a Path, metadata: &DigitiserMetadata, channel: Channel) -> anyhow::Result<PathBuf> {
+    pub(crate) fn build_path<'a>(
+        self,
+        path: &'a Path,
+        metadata: &DigitiserMetadata,
+        channel: Channel,
+    ) -> anyhow::Result<PathBuf> {
         let mut path_buf = path.to_owned();
         path_buf.push(metadata.timestamp.to_rfc3339());
         create_dir_all(&path_buf)?;
@@ -30,11 +35,21 @@ impl FileFormat {
         if path_buf.set_extension(self.to_string()) {
             Ok(path_buf)
         } else {
-            Err(anyhow::anyhow!("Could not set file extension {} to {:?}", self.to_string(), path_buf))
+            Err(anyhow::anyhow!(
+                "Could not set file extension {} to {:?}",
+                self.to_string(),
+                path_buf
+            ))
         }
     }
 }
 
 pub(crate) trait GraphSaver: Default {
-    fn save_as_svg(trace: &DigitiserTrace, channels: Vec<Channel>, path: PathBuf, size: (u32,u32), bounds: Bounds) -> Result<(), anyhow::Error>;
+    fn save_as_svg(
+        trace: &DigitiserTrace,
+        channels: Vec<Channel>,
+        path: PathBuf,
+        size: (u32, u32),
+        bounds: Bounds,
+    ) -> Result<(), anyhow::Error>;
 }

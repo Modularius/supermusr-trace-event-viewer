@@ -1,41 +1,43 @@
 use chrono::Utc;
-use rdkafka::{consumer::{Consumer, StreamConsumer}, TopicPartitionList};
+use rdkafka::{
+    consumer::{Consumer, StreamConsumer},
+    TopicPartitionList,
+};
 use tracing::instrument;
 
 use crate::{
-    finder::{searcher::Searcher, task::{SearchTask, TaskClass}, SearchResults, SearchStatus, SearchTarget},
+    finder::{
+        searcher::Searcher,
+        task::{SearchTask, TaskClass},
+        SearchResults, SearchStatus, SearchTarget,
+    },
     messages::{Cache, EventListMessage, FBMessage, TraceMessage},
 };
 
 pub(crate) struct SearchByCapture;
-impl TaskClass for SearchByCapture{}
+impl TaskClass for SearchByCapture {}
 
 impl<'a> SearchTask<'a, SearchByCapture> {
     /// Performs a FromEnd search.
     /// # Attributes
     /// - target: what to search for.
     #[instrument(skip_all)]
-    pub(crate) async fn search(
-        self,
-        target: SearchTarget,
-    ) -> (StreamConsumer, SearchResults) {
+    pub(crate) async fn search(self, target: SearchTarget) -> (StreamConsumer, SearchResults) {
         let start = Utc::now();
 
         let mut cache = Cache::default();
 
-        
         let mut tpl = TopicPartitionList::with_capacity(2);
         tpl.add_partition_offset(&self.topics.trace_topic, 0, rdkafka::Offset::End)
             .expect("");
         tpl.add_partition_offset(&self.topics.digitiser_event_topic, 0, rdkafka::Offset::End)
             .expect("");
-        self.consumer.assign(&tpl)
-            .expect("");
-// TODO
+        self.consumer.assign(&tpl).expect("");
+        // TODO
         // Find Digitiser Traces
         self.emit_status(SearchStatus::TraceSearchInProgress(0))
             .await;
-        
+
         let searcher = Searcher::new(
             &self.consumer,
             &self.topics.trace_topic,
