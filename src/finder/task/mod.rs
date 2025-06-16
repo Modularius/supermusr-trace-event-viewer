@@ -4,7 +4,7 @@ mod from_end;
 
 use std::marker::PhantomData;
 
-use rdkafka::consumer::BaseConsumer;
+use rdkafka::consumer::StreamConsumer;
 use tokio::sync::mpsc;
 use tracing::{error, instrument};
 
@@ -16,7 +16,7 @@ pub(crate) use from_end::SearchFromEnd;
 pub(crate) trait TaskClass {}
 
 pub(crate) struct SearchTask<'a, C : TaskClass> {
-    consumer: BaseConsumer,
+    consumer: StreamConsumer,
     send_status: &'a mpsc::Sender<SearchStatus>,
     select: &'a Select,
     topics: &'a Topics,
@@ -25,7 +25,7 @@ pub(crate) struct SearchTask<'a, C : TaskClass> {
 
 impl<'a, C: TaskClass> SearchTask<'a, C> {
     pub(crate) fn new(
-        consumer: BaseConsumer,
+        consumer: StreamConsumer,
         send_status: &'a mpsc::Sender<SearchStatus>,
         select: &'a Select,
         topics: &'a Topics,

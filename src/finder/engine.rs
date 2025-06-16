@@ -1,5 +1,5 @@
 use chrono::Duration;
-use rdkafka::consumer::BaseConsumer;
+use rdkafka::consumer::{BaseConsumer, StreamConsumer};
 use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::{error, instrument};
 
@@ -17,12 +17,12 @@ pub(crate) struct SearchEngine {
     /// The object takes temporary ownership of the consumer object,
     /// if another instance of SearchEngine wants to use it,
     /// it must be passed to it.
-    consumer: Option<BaseConsumer>,
+    consumer: Option<StreamConsumer>,
     target: Option<SearchTarget>,
-    /// When another instance of [Self] is finished with the [BaseConsumer] object,
+    /// When another instance of [Self] is finished with the [StreamConsumer] object,
     /// it is passed back via this channel.
-    send_init: mpsc::Sender<(BaseConsumer, SearchTarget)>,
-    recv_results: mpsc::Receiver<(BaseConsumer, SearchResults)>,
+    send_init: mpsc::Sender<(StreamConsumer, SearchTarget)>,
+    recv_results: mpsc::Receiver<(StreamConsumer, SearchResults)>,
     recv_status: mpsc::Receiver<SearchStatus>,
     status: Option<SearchStatus>,
     //
@@ -34,7 +34,7 @@ pub(crate) struct SearchEngine {
 }
 
 impl SearchEngine {
-    pub(crate) fn new(consumer: BaseConsumer, select: &Select, topics: &Topics) -> Self {
+    pub(crate) fn new(consumer: StreamConsumer, select: &Select, topics: &Topics) -> Self {
         let select = select.clone();
         let topics = topics.clone();
 

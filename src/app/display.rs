@@ -7,8 +7,7 @@ use ratatui::{
 use crate::{
     messages::{EventList, Trace},
     tui::{
-        ComponentStyle, FocusableComponent, Graph, InputComponent, ParentalFocusComponent, TextBox,
-        TuiComponent, TuiComponentBuilder,
+        ComponentStyle, FocusableComponent, Graph, GraphProperties, InputComponent, ParentalFocusComponent, TextBox, TuiComponent, TuiComponentBuilder
     },
     Component,
 };

@@ -3,61 +3,38 @@ mod svg;
 
 use std::{
     fs::create_dir_all,
-    marker::PhantomData,
-    ops::Range,
     path::{Path, PathBuf},
 };
 
-use anyhow::{bail, Error};
-use plotters::{
-    chart::{ChartBuilder, ChartContext},
-    coord::{types::RangedCoordf32, Shift},
-    prelude::{
-        BitMapBackend, Cartesian2d, Circle, DrawingArea, DrawingBackend, IntoDrawingArea,
-        PathElement, SVGBackend,
-    },
-    series::{LineSeries, PointSeries},
-    style::{IntoFont, RGBColor, ShapeStyle, BLACK, BLUE, WHITE},
-};
 use strum::{Display, EnumIter, EnumString};
 use supermusr_common::Channel;
-use tracing::{info, instrument};
 
-use crate::messages::DigitiserTrace;
+use crate::messages::{DigitiserMetadata, DigitiserTrace};
 
 pub(crate) use bounds::{Bound, Bounds, Point};
 pub(crate) use svg::SvgSaver;
 
 #[derive(Clone, EnumString, Display, EnumIter)]
 pub(crate) enum FileFormat {
+    #[strum(to_string = "svg")]
     Svg,
 }
 
-pub(crate) trait Backend<'b> {
-    const EXTENSION: &'static str;
-    type Backend: DrawingBackend;
+impl FileFormat {
+    pub(crate) fn build_path<'a>(self, path: &'a Path, metadata: &DigitiserMetadata, channel: Channel) -> anyhow::Result<PathBuf> {
+        let mut path_buf = path.to_owned();
+        path_buf.push(metadata.timestamp.to_rfc3339());
+        create_dir_all(&path_buf)?;
+        path_buf.push(channel.to_string());
 
-    fn new<T>(path: &'b T, size: (u32, u32)) -> Self::Backend
-    where
-        T: AsRef<Path> + ?Sized;
-}
-
-pub(crate) struct BackendSVG<'a> {
-    phantom: PhantomData<&'a ()>,
-}
-
-impl<'a, 'b: 'a> Backend<'b> for BackendSVG<'a> {
-    const EXTENSION: &'static str = "svg";
-    type Backend = SVGBackend<'a>;
-
-    fn new<T>(path: &'b T, size: (u32, u32)) -> Self::Backend
-    where
-        T: AsRef<Path> + ?Sized,
-    {
-        SVGBackend::new(path, size)
+        if path_buf.set_extension(self.to_string()) {
+            Ok(path_buf)
+        } else {
+            Err(anyhow::anyhow!("Could not set file extension {} to {:?}", self.to_string(), path_buf))
+        }
     }
 }
 
 pub(crate) trait GraphSaver: Default {
-    fn save_as_svg(trace: &DigitiserTrace, channels: Vec<Channel>, path: PathBuf);
+    fn save_as_svg(trace: &DigitiserTrace, channels: Vec<Channel>, path: PathBuf, size: (u32,u32), bounds: Bounds) -> Result<(), anyhow::Error>;
 }

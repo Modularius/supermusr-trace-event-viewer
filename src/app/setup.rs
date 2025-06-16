@@ -33,6 +33,8 @@ pub(crate) enum Focus {
     StepSizeMul,
     SavePath,
     Format,
+    Width,
+    Height,
 }
 
 pub(crate) struct Setup {
@@ -48,6 +50,8 @@ pub(crate) struct Setup {
     step_size_mul: TuiComponent<EditBox<i64>>,
     save_path: TuiComponent<EditBox<String>>,
     format: TuiComponent<EditBox<FileFormat>>,
+    width: TuiComponent<EditBox<u32>>,
+    height: TuiComponent<EditBox<u32>>,
 }
 
 impl Setup {
@@ -69,6 +73,8 @@ impl Setup {
             step_size_mul: EditBox::new(select.step.step_mul_coef, Some("Step Size Mul Coef")),
             save_path: EditBox::new("out".to_owned(), Some("Save Path")),
             format: EditBox::new(FileFormat::Svg, Some("Image Format")),
+            width: EditBox::new(800, Some("Image Width")),
+            height: EditBox::new(600, Some("Image Height")),
         };
         let mut setup = TuiComponentBuilder::new(ComponentStyle::default()).build(comp);
         setup.focused_component_mut().set_focus(true);
@@ -100,6 +106,10 @@ impl Setup {
 
     pub(crate) fn get_path(&self) -> PathBuf {
         PathBuf::from(self.save_path.get())
+    }
+
+    pub(crate) fn get_image_size(&self) -> (u32,u32) {
+        (*self.width.get(),*self.height.get())
     }
 }
 
@@ -190,12 +200,12 @@ impl Component for Setup {
         self.step_size_mul.render(frame, step_size_mul);
 
         // Save Settings Division
-        let (save_path, format) = {
+        let (save_path, format, width, height) = {
             let chunk = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Ratio(1, 2); 2])
+                .constraints([Constraint::Ratio(1, 4); 4])
                 .split(save_settings);
-            (chunk[0], chunk[1])
+            (chunk[0], chunk[1], chunk[2], chunk[3])
         };
         self.num_passes.render(frame, num_passes);
         self.min_step_size.render(frame, min_step_size);
@@ -203,6 +213,8 @@ impl Component for Setup {
 
         self.save_path.render(frame, save_path);
         self.format.render(frame, format);
+        self.width.render(frame, width);
+        self.height.render(frame, height);
     }
 }
 
@@ -222,6 +234,8 @@ impl ComponentContainer for Setup {
             Focus::StepSizeMul => &mut self.step_size_mul,
             Focus::SavePath => &mut self.save_path,
             Focus::Format => &mut self.format,
+            Focus::Width => &mut self.width,
+            Focus::Height => &mut self.height,
         }
     }
 

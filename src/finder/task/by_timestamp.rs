@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rdkafka::consumer::BaseConsumer;
+use rdkafka::consumer::StreamConsumer;
 use tracing::instrument;
 
 use crate::{
@@ -12,10 +12,11 @@ pub(crate) struct SearchByTimestamp;
 impl TaskClass for SearchByTimestamp {}
 
 impl<'a> SearchTask<'a, SearchByTimestamp> {
+    /// 
     #[instrument(skip_all)]
     async fn search_topic<M, E, A>(
         &self,
-        searcher: Searcher<'a, M>,
+        searcher: Searcher<'a, M, StreamConsumer>,
         steps: &Steps,
         target: &SearchTarget,
         emit: E,
@@ -62,19 +63,17 @@ impl<'a> SearchTask<'a, SearchByTimestamp> {
     pub(crate) async fn search(
         self,
         target: SearchTarget,
-    ) -> (BaseConsumer, SearchResults) {
+    ) -> (StreamConsumer, SearchResults) {
         let start = Utc::now();
 
         let mut cache = Cache::default();
-
-        let send_status = self.send_status;
 
         // Find Digitiser Traces
         let searcher = Searcher::new(
             &self.consumer,
             &self.topics.trace_topic,
             1,
-            send_status.clone(),
+            self.send_status.clone(),
         );
         let (trace_results, offset) = self
             .search_topic(
@@ -92,7 +91,7 @@ impl<'a> SearchTask<'a, SearchByTimestamp> {
             &self.consumer,
             &self.topics.digitiser_event_topic,
             offset,
-            send_status.clone(),
+            self.send_status.clone(),
         );
         let (eventlist_results, _) = self
             .search_topic(

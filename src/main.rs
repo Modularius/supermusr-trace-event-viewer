@@ -16,7 +16,7 @@ use crossterm::{
 };
 use ratatui::{prelude::CrosstermBackend, Terminal};
 use rdkafka::{
-    consumer::{BaseConsumer, Consumer},
+    consumer::{BaseConsumer, Consumer, StreamConsumer},
     error::KafkaError,
 };
 use std::{fs::File, net::SocketAddr};
@@ -87,9 +87,9 @@ pub fn create_default_consumer(
     password: &Option<String>,
     consumer_group: &String,
     topics_to_subscribe: Option<&[&str]>,
-) -> Result<BaseConsumer, KafkaError> {
+) -> Result<StreamConsumer, KafkaError> {
     // Setup consumer with arguments and default parameters.
-    let consumer: BaseConsumer =
+    let consumer: StreamConsumer =
         supermusr_common::generate_kafka_client_config(broker_address, username, password)
             .set("group.id", consumer_group)
             .set("enable.partition.eof", "false")

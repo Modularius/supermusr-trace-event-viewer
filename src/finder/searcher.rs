@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use rdkafka::{
-    consumer::{BaseConsumer, Consumer},
+    consumer::{BaseConsumer, Consumer, StreamConsumer},
     util::Timeout,
     TopicPartitionList,
 };
@@ -11,9 +11,9 @@ use tracing::instrument;
 use crate::{finder::SearchStatus, messages::FBMessage, Timestamp};
 
 /// Object to search through the broker from a given offset, on a given topic, for messages of type `M`.
-pub(crate) struct Searcher<'a, M> {
+pub(crate) struct Searcher<'a, M, C> {
     /// Reference to the Kafka consumer.
-    consumer: &'a BaseConsumer,
+    consumer: &'a C,
     /// Topic to search on.
     topic: String,
     /// Current offset.
@@ -24,7 +24,7 @@ pub(crate) struct Searcher<'a, M> {
     results: Vec<M>,
 }
 
-impl<'a, M> Searcher<'a, M> {
+impl<'a, M, C : Consumer> Searcher<'a, M, C> {
     /// Creates a new instance, and assigns the given topic to the broker's consumer.
     ///
     /// # Attributes
@@ -34,7 +34,7 @@ impl<'a, M> Searcher<'a, M> {
     /// - send_status: send channel, along which status messages should be sent.
     #[instrument(skip_all)]
     pub(crate) fn new(
-        consumer: &'a BaseConsumer,
+        consumer: &'a C,
         topic: &str,
         offset: i64,
         send_status: mpsc::Sender<SearchStatus>,
@@ -62,7 +62,7 @@ impl<'a, M> Searcher<'a, M> {
 
     #[instrument(skip_all)]
     /// Consumer the searcher and create a backstep iterator.
-    pub(crate) fn iter_backstep(self) -> BackstepIter<'a, M> {
+    pub(crate) fn iter_backstep(self) -> BackstepIter<'a, M, C> {
         BackstepIter {
             inner: self,
             step_size: None,
@@ -71,7 +71,7 @@ impl<'a, M> Searcher<'a, M> {
 
     #[instrument(skip_all)]
     /// Consumer the searcher and create a forward iterator.
-    pub(crate) fn iter_forward(self) -> ForwardSearchIter<'a, M> {
+    pub(crate) fn iter_forward(self) -> ForwardSearchIter<'a, M, C> {
         ForwardSearchIter {
             inner: self,
             message: None,
@@ -90,14 +90,14 @@ impl<'a, M> Searcher<'a, M> {
 }
 
 /// Extracts the results from the searcher, when the user is finished with it.
-impl<'a, M> Into<Vec<M>> for Searcher<'a, M> {
+impl<'a, M, C> Into<Vec<M>> for Searcher<'a, M, C> {
     #[instrument(skip_all)]
     fn into(self) -> Vec<M> {
         self.results
     }
 }
 
-impl<'a, M> Searcher<'a, M>
+impl<'a, M> Searcher<'a, M, StreamConsumer>
 where
     M: FBMessage<'a>,
 {
@@ -111,12 +111,13 @@ where
                 Duration::from_millis(1),
             )
             .expect("");
-        let msg: Option<M> = self
+
+        let msg : Option<M> = self
             .consumer
-            .iter()
-            .next()
-            .and_then(Result::ok)
+            .recv().await
+            .ok()
             .and_then(FBMessage::from_borrowed_message);
+
         match &msg {
             Some(msg) => self.send_status.send(SearchStatus::Text(format!(
                 "Message at offset {offset}: timestamp: {0}",
@@ -137,12 +138,12 @@ where
 /// Note this iterator can only move the [Searcher]'s offset, it cannot accumulate results.
 /// Also note, this iterator is not a real iterator (as in it does not implement [Iterator]).
 /// Instead it's methods are inspired by those frequently found in actual iterators.
-pub(crate) struct BackstepIter<'a, M> {
-    inner: Searcher<'a, M>,
+pub(crate) struct BackstepIter<'a, M, C> {
+    inner: Searcher<'a, M, C>,
     step_size: Option<i64>,
 }
 
-impl<'a, M> BackstepIter<'a, M> {
+impl<'a, M, C> BackstepIter<'a, M, C> {
     /// Sets the
     pub(crate) fn step_size(&mut self, step_size: i64) -> &mut Self {
         self.step_size = Some(step_size);
@@ -150,12 +151,12 @@ impl<'a, M> BackstepIter<'a, M> {
     }
 
     /// Consumes the iterator and returns the original [Searcher] object.
-    pub(crate) fn collect(self) -> Searcher<'a, M> {
+    pub(crate) fn collect(self) -> Searcher<'a, M, C> {
         self.inner
     }
 }
 
-impl<'a, M> BackstepIter<'a, M>
+impl<'a, M> BackstepIter<'a, M, StreamConsumer>
 where
     M: FBMessage<'a>,
 {
@@ -207,19 +208,19 @@ where
 /// Note this iterator can both move the [Searcher]'s offset and accumulate results.
 /// Also note, this iterator is not a real iterator (as in it does not implement [Iterator]).
 /// Instead it's methods are inspired by those frequently found in actual iterators.
-pub(crate) struct ForwardSearchIter<'a, M> {
-    inner: Searcher<'a, M>,
+pub(crate) struct ForwardSearchIter<'a, M, C> {
+    inner: Searcher<'a, M, C>,
     message: Option<M>,
 }
 
-impl<'a, M> ForwardSearchIter<'a, M> {
+impl<'a, M, C> ForwardSearchIter<'a, M, C> {
     /// Consumes the iterator and returns the original [Searcher] object.
-    pub(crate) fn collect(self) -> Searcher<'a, M> {
+    pub(crate) fn collect(self) -> Searcher<'a, M, C> {
         self.inner
     }
 }
 
-impl<'a, M> ForwardSearchIter<'a, M>
+impl<'a, M> ForwardSearchIter<'a, M, StreamConsumer>
 where
     M: FBMessage<'a>,
 {
@@ -229,14 +230,12 @@ where
     /// - f: a predicte taking a timestamp, it should return true when the timestamp is earlier than the target.
     #[instrument(skip_all)]
     pub(crate) async fn move_until<F: Fn(Timestamp) -> bool>(mut self, f: F) -> Self {
-        while let Some(msg) = self
+        while let Ok(msg) = self
             .inner
             .consumer
-            .poll(Timeout::After(Duration::from_millis(100)))
+            .recv().await
         {
-            if let Some(msg) = msg
-                .ok()
-                .and_then(FBMessage::from_borrowed_message)
+            if let Some(msg) = FBMessage::from_borrowed_message(msg)
                 .filter(|m| f(FBMessage::timestamp(m)))
             {
                 self.message = Some(msg);
@@ -266,15 +265,19 @@ where
                 self.inner.results.push(first_message);
             }
 
-            let mut messages = self
+            let mut messages : Option<M> = self
                 .inner
                 .consumer
-                .iter()
-                .flat_map(Result::ok)
-                .flat_map::<Option<M>, _>(FBMessage::from_borrowed_message);
+                .recv().await
+                .ok()
+                .and_then(FBMessage::from_borrowed_message);
 
             for _ in 0..number {
-                while let Some(msg) = messages.next() {
+                while let Some(msg) = messages {
+                    
+                    messages = self.inner.consumer.recv().await.ok()
+                        .and_then(FBMessage::from_borrowed_message);
+                    
                     self.inner
                         .send_status
                         .send(SearchStatus::Text(format!(

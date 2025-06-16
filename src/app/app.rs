@@ -4,11 +4,12 @@ use ratatui::{
     Frame,
 };
 use strum::{EnumCount, EnumIter};
+use supermusr_common::Time;
 
 use crate::{
     app::{Display, Results, Setup},
     finder::MessageFinder,
-    graphics::GraphSaver,
+    graphics::{Bound, Bounds, FileFormat, GraphSaver},
     messages::Cache,
     tui::{
         Component, ComponentContainer, FocusableComponent, InputComponent, Statusbar, TextBox,
@@ -31,11 +32,13 @@ pub(crate) enum Focus {
 }
 
 pub(crate) struct App<D: AppDependencies> {
+    /// 
     cache: Option<Cache>,
+    /// Flag indicating the program should quit.
     quit: bool,
+    /// Flag indicating the app should be redrawn.
     is_changed: bool,
     message_finder: D::MessageFinder,
-    graph_saver: D::GraphSaver,
     focus: Focus,
     setup: TuiComponent<Setup>,
     status: TuiComponent<Statusbar>,
@@ -45,13 +48,17 @@ pub(crate) struct App<D: AppDependencies> {
 }
 
 impl<'a, D: AppDependencies> App<D> {
+    /// Creates a new App instance.
+    /// 
+    /// # Attributes
+    /// - message_finder: TODO
+    /// - select: TODO
     pub(crate) fn new(message_finder: D::MessageFinder, select: &Select) -> Self {
         let mut app = App {
             quit: false,
             is_changed: true,
             cache: None,
             message_finder,
-            graph_saver: Default::default(),
             focus: Default::default(),
             setup: Setup::new(select),
             status: Statusbar::new(select),
@@ -63,10 +70,12 @@ impl<'a, D: AppDependencies> App<D> {
         app
     }
 
+    /// Returns whether the app has changed and needs to be redrawn.
     pub(crate) fn changed(&self) -> bool {
         self.is_changed
     }
 
+    /// Returns whether the `quit` flag has been set.
     pub(crate) fn is_quit(&self) -> bool {
         self.quit
     }
@@ -182,17 +191,20 @@ impl<D: AppDependencies> InputComponent for App<D> {
                         }
                     }
                 }
-                Focus::Display => {}
-            }
-        } else if key == KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL) {
-            if let Some(cache) = &self.cache {
-                if let Some((_, trace, channel)) = self.results.select(cache) {
-                    D::GraphSaver::save_as_svg(trace, vec![channel], self.setup.get_path());
-                    //let graph = BuildGraph::<BackendSVG<'_>>::new(800,600,bounds.time_range(), bounds.intensity_range());
-
-                    //let path_buf = graph.build_path(&output_to_file.path, metadata, *channel).expect("extension should write");
-                    //let eventlist = traces.events.as_ref().and_then(|ev|ev.get(channel));
-                    //graph.save_trace_graph(&path_buf, &trace, eventlist).expect("");
+                Focus::Display => {
+                    if let Some(cache) = &self.cache {
+                        if let Some((metadata, trace, channel)) = self.results.select(cache) {
+                            D::GraphSaver::save_as_svg(trace,
+                                vec![channel],
+                                FileFormat::Svg.build_path(&self.setup.get_path(), metadata, channel).expect(""),
+                                self.setup.get_image_size(), 
+                                Bounds {
+                                    time: Bound::from(1.0, [0, trace.traces.len() as Time].into_iter()),
+                                    intensity: Bound::from(1.0, trace.traces[&channel].iter().copied())
+                                }
+                            ).expect("");
+                        }
+                    }
                 }
             }
         } else {

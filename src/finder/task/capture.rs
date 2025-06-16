@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rdkafka::consumer::BaseConsumer;
+use rdkafka::{consumer::{Consumer, StreamConsumer}, TopicPartitionList};
 use tracing::instrument;
 
 use crate::{
@@ -18,13 +18,20 @@ impl<'a> SearchTask<'a, SearchByCapture> {
     pub(crate) async fn search(
         self,
         target: SearchTarget,
-    ) -> (BaseConsumer, SearchResults) {
+    ) -> (StreamConsumer, SearchResults) {
         let start = Utc::now();
 
         let mut cache = Cache::default();
 
-        let send_status = self.send_status;
-
+        
+        let mut tpl = TopicPartitionList::with_capacity(2);
+        tpl.add_partition_offset(&self.topics.trace_topic, 0, rdkafka::Offset::End)
+            .expect("");
+        tpl.add_partition_offset(&self.topics.digitiser_event_topic, 0, rdkafka::Offset::End)
+            .expect("");
+        self.consumer.assign(&tpl)
+            .expect("");
+// TODO
         // Find Digitiser Traces
         self.emit_status(SearchStatus::TraceSearchInProgress(0))
             .await;
@@ -51,7 +58,7 @@ impl<'a> SearchTask<'a, SearchByCapture> {
             &self.consumer,
             &self.topics.digitiser_event_topic,
             2 * target.number as i64 + 1,
-            send_status.clone(),
+            self.send_status.clone(),
         );
 
         let eventlist_results: Vec<EventListMessage> = searcher
